@@ -6,6 +6,7 @@ from ryu.controller.handler import (HANDSHAKE_DISPATCHER, MAIN_DISPATCHER,
                                     CONFIG_DISPATCHER, DEAD_DISPATCHER)
 from ryu.controller import ofp_event
 from ryu import topology
+from ryu.ofproto import ofproto_v1_0
 
 from switch import Port, Switch
 
@@ -21,13 +22,18 @@ class Routing(app_manager.RyuApp):
 
     def _test(self):
         while True:
-            print '-------------------'
-            for k, switch in self.dpid_to_switch.iteritems():
-                for k, port in switch.ports.iteritems():
-                    print port.dpid, port.port_no
-
-            print '-------------------'
+            self.__test()
             gevent.sleep(3)
+
+    def __test(self):
+        print '-------------------'
+        for k, switch in self.dpid_to_switch.iteritems():
+            print switch, switch.name
+            for k, port in switch.ports.iteritems():
+                print port
+
+        print '-------------------'
+
 
     def _pre_install_flow_entry(self, switch):
         # 'switch' is a Switch object
@@ -35,8 +41,15 @@ class Routing(app_manager.RyuApp):
 
     @set_ev_handler(topology.event.EventSwitchEnter)
     def switch_enter_handler(self, event):
-        s = Switch(event.switch.dp)
-        self.dpid_to_switch[s.dp.id] = s
+        # very strangely, EventSwitchEnter happens after 
+        # EventOFPSwitchFeatures sometimes
+        dpid = event.switch.dp.id
+        try:
+            s = self.dpid_to_switch[dpid]
+        except KeyError:
+            s = Switch(event.switch.dp)
+            self.dpid_to_switch[dpid] = s
+
         self._pre_install_flow_entry(s)
 
     @set_ev_handler(topology.event.EventSwitchLeave)
@@ -100,5 +113,16 @@ class Routing(app_manager.RyuApp):
     # we must handle this event because ryu's topology discovery
     # only shows ports between switches
     def switch_feature_handler(self, event):
-        print event
-        # XXX
+        dpid = event.msg.datapath_id
+        try:
+            switch = self.dpid_to_switch[dpid]
+        except KeyError:
+            self.dpid_to_switch[dpid] = Switch(event.msg.datapath)
+
+        switch = self.dpid_to_switch[dpid]
+        for port_no, port in event.msg.ports.iteritems():
+            if port_no not in switch.ports:
+                p = Port(port = port, dp = event.msg.datapath)
+                switch.ports[p.port_no] = p
+            if port_no == ofproto_v1_0.OFPP_LOCAL:
+                switch.name = port.name
