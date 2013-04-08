@@ -26,7 +26,7 @@ from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_0
 from ryu.lib.mac import haddr_to_str
 from ryu.lib.packet.packet import Packet
-from ryu.lib.packet import ipv4,ipv6,ethernet,icmp,arp
+from ryu.lib.packet import ipv4,ipv6,ethernet,icmp,arp,icmpv6
 
 from ryu.ofproto import nx_match
 from ryu.ofproto import ether
@@ -49,6 +49,7 @@ class SimpleSwitch(app_manager.RyuApp):
         self.mac_to_port = {}
         self.port_to_ip = {}
         self.port_to_switch_mac = {}
+        self.port_to_ipv6 = {}
 
     def add_flow(self, datapath, in_port, dst, actions):
         ofproto = datapath.ofproto
@@ -122,6 +123,8 @@ class SimpleSwitch(app_manager.RyuApp):
         print 'mac_to_port',self.mac_to_port,'\n'
        
         dst, src, _eth_type = struct.unpack_from('!6s6sH', buffer(msg.data), 0)
+        LOG.info("packet in %s %s %s %s",
+                 dpid, haddr_to_str(src), haddr_to_str(dst), msg.in_port)
 
         if _eth_type == ether.ETH_TYPE_ARP:
             #if dst in self.port_to_switch_mac[dpid]:
@@ -147,11 +150,9 @@ class SimpleSwitch(app_manager.RyuApp):
                     p = Packet()
                     p.add_protocol(e)
                     p.add_protocol(a) 
-                    p.serialize()                   
-                    
-                    packet_out = datapath.ofproto_parser.OFPPacketOut(datapath = datapath,buffer_id = 0xffffffff,in_port=ofproto_v1_0.OFPP_NONE,
-                                 actions = [datapath.ofproto_parser.OFPActionOutput(in_port)],data = p.data)
-                    datapath.send_msg(packet_out)
+                    p.serialize()             
+                                    
+                    datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],data=p.data)
 
                     print "arp request packet's dst_mac is ",haddr_to_str(self.port_to_switch_mac[dpid][in_port])
                     
@@ -195,15 +196,70 @@ class SimpleSwitch(app_manager.RyuApp):
                         p.add_protocol(i)
                         p.add_protocol(ic) 
                         p.serialize()                       
-                        datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],
-                            data=p.data)
+                        datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],data=p.data)
                         print 'send a ping replay'                        
                     else:
-                        pass  
+                        pass
         
-        
-        LOG.info("packet in %s %s %s %s",
-                 dpid, haddr_to_str(src), haddr_to_str(dst), msg.in_port)
+        if _eth_type == ether.ETH_TYPE_IPV6:
+            ipv6_pkt = self.find_packet(msg,'ipv6')
+            #don't care about ipv6's extention header
+            icmpv6_pkt = self.find_packet(msg,'icmpv6')
+            if icmpv6_pkt != None:
+                if icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
+
+                    self.port_to_ipv6.setdefault(dpid,{})
+                    #self.port_to_ipv6[dpid][in_port]=hexlify(((ipv6_pkt.src & (1<<128))-(1<<64)) + (1<<64) - 2)
+                    self.port_to_ipv6[dpid][in_port]=struct.pack('!4I',0x100000,0x0,0xffffffff,0xfffffffd)
+                    
+                    if icmpv6_pkt.data.dst == self.port_to_ipv6[dpid][in_port]:
+                           
+                        #send a ND_NEIGHBOR_REPLY packet
+                        ether_dst = src
+                        ether_src = self.port_to_switch_mac[dpid][in_port]
+                        e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IPV6)
+                        
+                        ic6_data_data = icmpv6.nd_option_la(hw_src=self.port_to_switch_mac[dpid][in_port],data=None)
+                        #res = 3 or 7
+                        ic6_data = icmpv6.nd_neighbor(res=3,dst=icmpv6_pkt.data.dst,type_=icmpv6.nd_neighbor.ND_OPTION_TLA,length=1,data=ic6_data_data)
+                        ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT,code=0,csum=0,data=ic6_data)  
+                        #payload_length
+                        i6 = ipv6.ipv6(version= 6,traffic_class=0,flow_label=0,payload_length=32,nxt=58,hop_limit=255,
+                            src=icmpv6_pkt.data.dst,dst=ipv6_pkt.src) 
+                        p = Packet()
+                        p.add_protocol(e)
+                        p.add_protocol(i6)
+                        p.add_protocol(ic6) 
+                        p.serialize() 
+                        datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],data=p.data)
+                        print 'send a NA packet'
+                        
+                
+                if icmpv6_pkt.type_ == icmpv6.ICMPV6_ECHO_REQUEST:
+                    if self.port_to_ipv6[dpid].has_key(in_port):
+                       
+                    #print hexlify(self.port_to_ipv6[dpid][in_port])
+                    #print 'ipv6_pkt.dst is',hexlify(ipv6_pkt.dst)
+                    #print 'ipv6_pkt.dst is',hexlify(ipv6_pkt.dst)                  
+                        if ipv6_pkt.dst == self.port_to_ipv6[dpid][in_port]:
+                            ether_dst = src
+                            ether_src = self.port_to_switch_mac[dpid][in_port]
+                            e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IPV6)
+                            ic6_data = icmpv6_pkt.data
+                            ic6 = icmpv6.icmpv6(type_=icmpv6.ICMPV6_ECHO_REPLY,code=0,csum=0,data=ic6_data)
+                            i6 = ipv6.ipv6(version= 6,traffic_class=0,flow_label=0,payload_length=64,nxt=58,hop_limit=64,
+                                src=ipv6_pkt.dst,dst=ipv6_pkt.src)
+                            p = Packet()
+                            p.add_protocol(e)
+                            p.add_protocol(i6)
+                            p.add_protocol(ic6) 
+                            p.serialize() 
+                            datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],data=p.data)
+                            print 'send a ping6 reply packet'
+
+
+                                        
+                    
 
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = msg.in_port
@@ -215,16 +271,11 @@ class SimpleSwitch(app_manager.RyuApp):
 
         actions = [datapath.ofproto_parser.OFPActionOutput(out_port)]
         if out_port != ofproto.OFPP_FLOOD:
-            self.add_flow(datapath, msg.in_port, dst, actions)        
+            if _eth_type == ether.ETH_TYPE_IP:
+                self.add_flow(datapath, msg.in_port, dst, actions)        
             #add a ipv6 flow table pay attention ipv6_flow entry only be added once when ipv4 flow entry is added       
-            if _eth_type == ether.ETH_TYPE_IPV6:
-                
-                ipv6_pkt = self.find_packet(msg,'ipv6')
-                #ipv6_src=struct.pack('!4I',self._binary_to_ipv6_format(ipv6_packet.src))
-                #ipv6_dst=struct.pack('!4I',self._binary_to_ipv6_format(ipv6_packet.dst))
-                ipv6_src = struct.pack('!4I',int(hexlify(ipv6_pkt.src)[0:8],16),int(hexlify(ipv6_pkt.src)[8:16],16),int(hexlify(ipv6_pkt.src)[16:24],16),int(hexlify(ipv6_pkt.src)[24:32],16))
-                ipv6_dst = struct.pack('!4I',int(hexlify(ipv6_pkt.dst)[0:8],16),int(hexlify(ipv6_pkt.dst)[8:16],16),int(hexlify(ipv6_pkt.dst)[16:24],16),int(hexlify(ipv6_pkt.dst)[24:32],16))
-                #print ipv6_src,ipv6_dst
+            elif _eth_type == ether.ETH_TYPE_IPV6:
+
                 '''
                 # judge if src and dst addr is special 
                 # eg: src [0,0,0,0] dst begin with 0xff01 or 0x ff02 
@@ -233,11 +284,19 @@ class SimpleSwitch(app_manager.RyuApp):
                 #elif ipv6_dst[0]&0xfe800000 == 0xfe800000:
                 #    print 'ipv6 dst address is Link-Local address'
                 else:
-                '''                      
+                '''     
+                
+                ipv6_pkt = self.find_packet(msg,'ipv6')
+                #ipv6_src=struct.pack('!4I',self._binary_to_ipv6_format(ipv6_packet.src))
+                #ipv6_dst=struct.pack('!4I',self._binary_to_ipv6_format(ipv6_packet.dst))
+                ipv6_src = struct.pack('!4I',int(hexlify(ipv6_pkt.src)[0:8],16),int(hexlify(ipv6_pkt.src)[8:16],16),int(hexlify(ipv6_pkt.src)[16:24],16),int(hexlify(ipv6_pkt.src)[24:32],16))
+                ipv6_dst = struct.pack('!4I',int(hexlify(ipv6_pkt.dst)[0:8],16),int(hexlify(ipv6_pkt.dst)[8:16],16),int(hexlify(ipv6_pkt.dst)[16:24],16),int(hexlify(ipv6_pkt.dst)[24:32],16))
+                   
                 rule={'ipv6_src':ipv6_src,'ipv6_dst':ipv6_dst}
                 self.nx_ipv6_add_flow(datapath,rule,actions)
                 print 'add a ipv6 flow entry'  
-            
+            else:
+                pass
           
         out = datapath.ofproto_parser.OFPPacketOut(
             datapath=datapath, buffer_id=msg.buffer_id, in_port=msg.in_port,
@@ -250,15 +309,11 @@ class SimpleSwitch(app_manager.RyuApp):
 
         msg = ev.msg
         dpid = msg.datapath_id
-        if self.port_to_switch_mac.has_key(dpid):
-            pass
-        else:
-            self.port_to_switch_mac[dpid] = {}
+        self.port_to_switch_mac.setdefault(dpid,{})
         dp_ports = msg.ports 
         for k,v in dp_ports.items():
             self.port_to_switch_mac[dpid][k] = v.hw_addr
-        print 'ports initialize\n'
-        #print self.port_to_switch_mac
+        print 'ports initialize\n'        
 
 
     @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
