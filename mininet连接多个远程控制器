@@ -1,6 +1,6 @@
-*1.启动多个远程控制器(Controller)，--ofp-listen-host=‘你设定的端口号’，后面连接要启动的ryu应用如simple_switch.py。
-  ryu-manager --ofp-listen-host=6633 ./ryu/app/simple_switch.py
-  ryu-manager --ofp-listen-host=6634 ./ryu/app/simple_switch.py
+*1.启动多个远程控制器(Controller)，--ofp-tcp-listen-port=‘你设定的端口号’，后面连接要启动的ryu应用如simple_switch.py。
+  ryu-manager --ofp-tcp-listen-port=6633 ./ryu/app/simple_switch.py
+  ryu-manager --ofp-tcp-listen-port=6634 ./ryu/app/simple_switch.py
 *2.启动mininet,连接远程控制器。
   #!/usr/bin/python
 
