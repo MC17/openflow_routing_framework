@@ -22,7 +22,7 @@ class Port(switches.Port):
             self.hw_addr = port.hw_addr
             self.name = port.name
 
-            # below is our new variables
+            # below are our new variables
             if peer:
                 self.peer_switch_dpid = peer.dpid
                 self.peer_port_no = peer.port_no
