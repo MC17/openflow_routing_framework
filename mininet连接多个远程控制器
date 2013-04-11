@@ -1,10 +1,12 @@
-*1.启动多个远程控制器(Controller)，--ofp-tcp-listen-port=‘你设定的端口号’，后面连接要启动的ryu应用如simple_switch.py。
+#!/usr/bin/python
+
+"""
+1.启动多个远程控制器(Controller)，--ofp-tcp-listen-port=‘你设定的端口号’，后面连接要启动的ryu应用如simple_switch.py。
   ryu-manager --ofp-tcp-listen-port=6633 ./ryu/app/simple_switch.py
   ryu-manager --ofp-tcp-listen-port=6634 ./ryu/app/simple_switch.py
 *2.启动mininet,连接远程控制器。
-  #!/usr/bin/python
 
-"""
+
 This example creates a multi-controller network from semi-scratch by
 using the net.add*() API and manually starting the switches and controllers.
 
@@ -38,6 +40,13 @@ def multiControllerNet():
     print "*** Creating hosts"
     hosts1 = [ net.addHost( 'h%d' % n ) for n in 3, 4 ]
     hosts2 = [ net.addHost( 'h%d' % n ) for n in 5, 6 ]
+
+    """
+    we can also use follows to add Host 
+    h1 = net.addHost('h1',ip='192.168.1.2/24',mac='00:00:00:00:00:01')
+    h2 = net.addHost('h2',ip='192.168.2.2/24',mac='00:00:00:00:00:02')
+    h3 = net.addHost('h3',ip='192.168.2.3/24',mac='00:00:00:00:00:03')
+    """
 
     print "*** Creating links"
     for h in hosts1:
