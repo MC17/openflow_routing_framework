@@ -131,9 +131,9 @@ class Routing(app_manager.RyuApp):
                 switch.name = port.name
 
     def find_packet(self, pkt, target):
-        for packet in pkt:
+        for packet in pkt.protocols:
             if packet.protocol_name == target:
-                return packet 
+                return packet
         print "can't find target_packet!"
         return None
 
@@ -146,7 +146,7 @@ class Routing(app_manager.RyuApp):
             e.g. when a host need to send a packet to the gateway, it will
                 firstly send an ARP to get the MAC address of the gateway
         '''
-        print 'arp', protocol_pkt
+        print 'arp', arp_pkt
 
         if arp_pkt.opcode != arp.ARP_REQUEST:
             return
@@ -177,7 +177,7 @@ class Routing(app_manager.RyuApp):
         p.serialize()             
                         
         datapath.send_packet_out(in_port = ofproto_v1_0.OFPP_NONE,
-                actions = [datapath.ofproto_parser.OFPActionOutput(in_port)],
+                actions = [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data = p.data)
 
         print "arp request packet's dst_mac is ", reply_src_mac
@@ -197,7 +197,7 @@ class Routing(app_manager.RyuApp):
         ipv4_layer = self.find_packet(pkt, 'ipv4')
         ip_src = ipv4_layer.src
         ip_dst = ipv4_layer.dst
-
+        
         need_reply = False
         for _k, p in switch.ports.iteritems():
             if p.ipv4_addr == ip_dst:
@@ -205,7 +205,7 @@ class Routing(app_manager.RyuApp):
                 break
         if not need_reply:
             return
-
+        
         echo_id = icmp_pkt.data.id
         echo_seq = icmp_pkt.data.seq
         echo_data = bytearray(icmp_pkt.data.data)
@@ -222,13 +222,14 @@ class Routing(app_manager.RyuApp):
             identification=0,flags=0x000,offset=0,ttl=64,proto=1,csum=0,
             src=ip_dst,dst=ip_src,option=None)
         ic = icmp.icmp(type_= 0,code=0,csum=0,data=icmp_data)
-        p = Packet()
+        p = packet.Packet()
         p.add_protocol(e)
         p.add_protocol(i)
-        p.add_protocol(ic) 
-        p.serialize()                       
+        p.add_protocol(ic)
+        p.serialize()
+        datapath = msg.datapath
         datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,
-                actions=[datapath.ofproto_parser.OFPActionOutput(in_port)],
+                actions=[datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data=p.data)
         print 'send a ping replay'
 
@@ -254,21 +255,24 @@ class Routing(app_manager.RyuApp):
             ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT,code=0,
                     csum=0,data=ic6_data)  
             #payload_length
+            ipv6_pkt = self.find_packet(pkt, 'ipv6')
             i6 = ipv6.ipv6(version= 6,traffic_class=0,flow_label=0,
                     payload_length=32,nxt=58,hop_limit=255,
                     src=icmpv6_pkt.data.dst,dst=ipv6_pkt.src)
             p = packet.Packet()
             p.add_protocol(e)
             p.add_protocol(i6)
-            p.add_protocol(ic6) 
-            p.serialize() 
+            p.add_protocol(ic6)
+            p.serialize()
+            datapath = msg.datapath
             datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,
                     actions=
-                        [datapath.ofproto_parser.OFPActionOutput(in_port)],
+                        [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
             print 'send a NA packet'
         elif icmpv6_pkt.type_ == icmpv6.ICMPV6_ECHO_REQUEST:
-            ipv6_pkt = find_packet(pkt, 'ipv6')
+            ipv6_pkt = self.find_packet(pkt, 'ipv6')
+            
             need_reply = False
             for _k, p in switch.ports.iteritems():
                 if p.ipv6_addr == ipv6_pkt.dst:
@@ -276,6 +280,7 @@ class Routing(app_manager.RyuApp):
                     break
             if not need_reply:
                 return
+            
             ether_layer = self.find_packet(pkt, 'ethernet')
             ether_dst = ether_layer.src
             ether_src = switch.ports[in_port_no].hw_addr
@@ -290,10 +295,11 @@ class Routing(app_manager.RyuApp):
             p.add_protocol(e)
             p.add_protocol(i6)
             p.add_protocol(ic6) 
-            p.serialize() 
+            p.serialize()
+            datapath = msg.datapath
             datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,
                     actions=
-                        [datapath.ofproto_parser.OFPActionOutput(in_port)],
+                        [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
             print 'send a ping6 reply packet'
 
@@ -323,4 +329,4 @@ class Routing(app_manager.RyuApp):
                 self._handle_ipv6(event.msg, pkt, p)
             else:
                 # should be more classifications here, BGP/OSPF etc.
-                print p
+                pass
