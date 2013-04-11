@@ -13,6 +13,8 @@ from ryu.ofproto import ether, inet
 
 from switch import Port, Switch
 
+from util import read_cfg
+
 class Routing(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
@@ -20,6 +22,14 @@ class Routing(app_manager.RyuApp):
         
         self.dpid_to_switch = {}    # dpid_to_switch[dpid] = Switch
                                     # maintains all the switches
+	self.switch_cfg = {}
+	self.filepath = 'config.xml'
+
+	try:
+	    self.switch_cfg = read_cfg(self.filepath)
+	    #print self.switch_cfg
+	except:
+	    print "File %s Parse Error" % self.filepath
 
         #gevent.spawn(self._test)
 
