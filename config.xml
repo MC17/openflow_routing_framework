@@ -1,0 +1,16 @@
+<head>
+<switches>
+<switch name = 's1' border='false' >
+    <port name = '0'>
+       <ip>192.168.1.1</ip>
+       <prefixlen>24</prefixlen>
+       <mac>hello_mac</mac>
+    </port>
+    <port name = '1'>
+       <ip>192.168.2.1</ip>
+       <prefixlen>24</prefixlen>
+       <mac>world_mac</mac>
+    </port>
+</switch>
+</switches>
+</head>
