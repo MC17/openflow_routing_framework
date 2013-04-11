@@ -1,6 +1,14 @@
 
 import xml.etree.ElementTree as ET
 
+
+"""
+parse xml file to dict
+the dict looks like:
+{'switches': {'switch': {'border': 'false', 'port': [{'prefixlen': '24', 'ip': '192.168.1.1', 'mac': 'hello_mac', 'name': '0'}, {'prefixlen': '24', 'ip': '192.168.2.1', 'mac': 'world_mac', 'name': '1'}], 'name': 's1'}}}
+
+"""
+
 class XmlListConfig(list):
     def __init__(self, aList):
         for element in aList:
