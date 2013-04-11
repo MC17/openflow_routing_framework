@@ -77,8 +77,8 @@ def to_dict(tree):
     
 if __name__ == '__main__':
     filepath = 'config.xml'
-    tree = read_config(filepath)
-    print to_dict(tree)
+    dic = read_cfg(filepath)
+    print dic
 
 
 
