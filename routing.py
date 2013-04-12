@@ -22,16 +22,15 @@ class Routing(app_manager.RyuApp):
         
         self.dpid_to_switch = {}    # dpid_to_switch[dpid] = Switch
                                     # maintains all the switches
-	self.switch_cfg = {}
-	self.filepath = 'config.xml'
+        self.filepath = 'config.xml'
 
-	try:
-	    self.switch_cfg = read_cfg(self.filepath)
-	    #print self.switch_cfg
-	except:
-	    print "File %s Parse Error" % self.filepath
+        try:
+            self.switch_cfg = read_cfg(self.filepath)
+            print self.switch_cfg
+        except:
+            print "File %s Parse Error" % self.filepath
 
-        #gevent.spawn(self._test)
+            #gevent.spawn(self._test)
 
     def _test(self):
         while True:
