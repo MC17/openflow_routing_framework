@@ -76,14 +76,17 @@ class XmlDictConfig(dict):
 def read_cfg(filepath):
 
     tree = None
-    dic = {}
+    switches = {}
     try:
         tree = ET.parse(filepath)
         dic = to_dict(tree)
+        switches = to_switches(dic)
     except ET.ParseError as e:
-        print e
+        print 'File %s Parse Error :'% filepath,e
+    except Exception as e:
+        print 'File %s Parse Error :'% filepath,e
     finally:
-        return dic
+        return switches
 
 def to_dict(tree):
     xmldict = {}
@@ -105,7 +108,7 @@ def to_switches(xmldic):
             name = switches.get('name') if switches.get('name') is not None else 'undefine'
             dic_switches[name] = handle_switch(switches)
         else:
-            print 'test',type(switches)
+            print 'switches type:',type(switches)
     return dic_switches
 
 def handle_switch(switch):
@@ -122,7 +125,7 @@ def handle_switch(switch):
             num = ports.get('num') if ports.get('num') is not None else 'undefine'
             dic_ports[num] = handle_port(ports)
         else:
-            print 'test1',type(ports)
+            print 'ports type:',type(ports)
     return dic_ports
     
 def handle_port(port):
@@ -132,11 +135,11 @@ def handle_port(port):
 
 if __name__ == '__main__':
     filepath = 'config.xml'
-    dic = read_cfg(filepath)
-    switches_cfg = to_switches(dic)
+    switches_cfg = read_cfg(filepath)
     s1 = switches_cfg.get('s1')
-    port1 = s1.get('1') # s1[port_no] = Gateway
-    print port1
+    if s1:
+        port1 = s1.get('1') # s1[port_no] = Gateway
+        print port1
 
 
 
