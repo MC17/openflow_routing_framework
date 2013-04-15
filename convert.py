@@ -8,7 +8,7 @@
 #ipv6_src <-> string
 #
 #
-
+import struct
 from types import *
 
 _HADDR_LEN = 6
@@ -56,11 +56,49 @@ def ipv4_to_str( ip ):
     return "%i.%i.%i.%i" % ( w, x, y, z )
 
 # ipv6
+
+IPV6_PACK_STR = '!8H'
+
+
+def ipv6_to_arg_list(ipv6):
+    '''
+        convert ipv6 string to a list of 8 different parts
+    '''
+    args = []
+    if '::' in ipv6:
+        h, t = ipv6.split('::')
+        h_list = [int(x, 16) for x in h.split(':')]
+        t_list = [int(x, 16) for x in t.split(':')]
+        args += h_list
+        zero = [0]
+        args += ((8 - len(h_list) - len(t_list)) * zero)
+        args += t_list
+    else:
+        args = [int(x, 16) for x in ipv6.split(':')]
+
+    return args
+
+
+def ipv6_to_bin(ipv6):
+    '''
+        convert ipv6 string to binary representation
+    '''
+    args = ipv6_to_arg_list(ipv6)
+    return struct.pack(IPV6_PACK_STR, *args)
+
+
+def bin_to_ipv6(bin_addr):
+    '''
+        convert binary representation to human readable string
+    '''
+    args = struct.unpack_from(IPV6_PACK_STR, bin_addr)
+    return ':'.join('%x' % x for x in args)
     
 if __name__ == '__main__':
     a = 3232236035
     print ipv4_to_str(a)
-
+    print bin_to_ipv6(ipv6_to_bin('3f:10::1:2'))
+    print bin_to_ipv6(ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c'))
 
 
 
