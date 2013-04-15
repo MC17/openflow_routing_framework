@@ -26,7 +26,7 @@ class Routing(app_manager.RyuApp):
 
         try:
             self.switch_cfg = read_cfg(self.filepath)
-            print self.switch_cfg
+            #print self.switch_cfg
         except:
             print "File %s Parse Error" % self.filepath
 
@@ -137,7 +137,9 @@ class Routing(app_manager.RyuApp):
                 p = Port(port = port, dp = event.msg.datapath)
                 switch.ports[p.port_no] = p
             if port_no == ofproto_v1_0.OFPP_LOCAL:
-                switch.name = port.name
+                switch.name = port.name.rstrip('\x00')
+
+        switch.update_from_config(self.switch_cfg)
 
     def find_packet(self, pkt, target):
         for packet in pkt.protocols:
@@ -166,7 +168,7 @@ class Routing(app_manager.RyuApp):
         req_src_ip = arp_pkt.src_ip
         
         port = switch.ports[in_port_no]
-        if req_dst_ip != port.ipv4_addr:
+        if port.gateway and req_dst_ip != port.gateway.gw_ip:
             return
 
         datapath = msg.datapath
@@ -209,7 +211,7 @@ class Routing(app_manager.RyuApp):
         
         need_reply = False
         for _k, p in switch.ports.iteritems():
-            if p.ipv4_addr == ip_dst:
+            if p.gateway and p.gateway.gw_ip == ip_dst:
                 need_reply = True
                 break
         if not need_reply:
@@ -249,7 +251,7 @@ class Routing(app_manager.RyuApp):
 
         if icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
             port = switch.ports[in_port_no]
-            if icmpv6_pkt.data.dst != port.ipv6_addr:
+            if port.gateway and icmpv6_pkt.data.dst != port.gateway.gw_ipv6:
                 return
             #send a ND_NEIGHBOR_REPLY packet
             ether_layer = self.find_packet(pkt, 'ethernet')
@@ -284,7 +286,7 @@ class Routing(app_manager.RyuApp):
             
             need_reply = False
             for _k, p in switch.ports.iteritems():
-                if p.ipv6_addr == ipv6_pkt.dst:
+                if p.gateway and p.gateway.gw_ipv6 == ipv6_pkt.dst:
                     need_reply = True
                     break
             if not need_reply:
@@ -303,7 +305,7 @@ class Routing(app_manager.RyuApp):
             p = packet.Packet()
             p.add_protocol(e)
             p.add_protocol(i6)
-            p.add_protocol(ic6) 
+            p.add_protocol(ic6)
             p.serialize()
             datapath = msg.datapath
             datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,

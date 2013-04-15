@@ -120,10 +120,10 @@ def handle_switch(switch):
         if isinstance(ports, list):
             for port in ports:
                 num = port.get('num') if port.get('num') is not None else 'undefine'
-                dic_ports[num] = handle_port(port)
+                dic_ports[int(num)] = handle_port(port)
         elif isinstance(ports, dict):
             num = ports.get('num') if ports.get('num') is not None else 'undefine'
-            dic_ports[num] = handle_port(ports)
+            dic_ports[int(num)] = handle_port(ports)
         else:
             print 'ports type:',type(ports)
     return dic_ports
@@ -137,10 +137,9 @@ if __name__ == '__main__':
     filepath = 'config.xml'
     switches_cfg = read_cfg(filepath)
     s1 = switches_cfg.get('s1')
+    s2 = switches_cfg.get('s2')
+    print s2.get('0')
     if s1:
         port1 = s1.get('1') # s1[port_no] = Gateway
         print port1
-
-
-
 

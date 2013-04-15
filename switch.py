@@ -42,6 +42,7 @@ class Port(switches.Port):
             raise AttributeError
 
         self.is_border = False  # if this is a border port of the network
+        self.gateway = None
 
     def to_dict(self):
         d = super(Port, self).to_dict()
@@ -49,6 +50,13 @@ class Port(switches.Port):
         d['peer_port_no'] = port_no_to_str(self.peer_port_no)
         d['is_border'] = 'True' if self.is_border else 'False'
         return d
+
+    def update_from_config(self, config):
+        try:
+            self.gateway = config[self.port_no]
+        except KeyError:
+            pass
+        print self.gateway
 
 
 class Switch(switches.Switch):
@@ -65,3 +73,11 @@ class Switch(switches.Switch):
         # port_no -> Port, eg. ports[port_no] = Port
         # note that this variable overshadows super.ports
         self.ports = {}
+
+    def update_from_config(self, config):
+        if self.name == None:
+            return
+
+        d = config[self.name]
+        for k, v in self.ports.iteritems():
+            v.update_from_config(d)

@@ -1,26 +1,30 @@
 <switches>
 <switch name = 's1' border='false' >
-    <port name = 'eth0' num = '0'>
+    <port name = 'eth0' num = '1'>
        <ip>192.168.1.1</ip>
        <prefixlen>24</prefixlen>
-       <mac>hello_mac</mac>
+       <ipv6>10::1:1</ipv6>
+       <ipv6prefixlen>64</ipv6prefixlen>
     </port>
-    <port name = 'eth1' num = '1'>
+    <port name = 'eth1' num = '2'>
        <ip>192.168.2.1</ip>
        <prefixlen>24</prefixlen>
-       <mac>world_mac</mac>
+       <ipv6>10::2:1</ipv6>
+       <ipv6prefixlen>64</ipv6prefixlen>
     </port>
 </switch>
-<switch name = 's2' border='true' >
-    <port name = 'eth0' num = '0'>
+<switch name = 's2' border='false' >
+    <port name = 'eth0' num = '1'>
+       <ip>192.168.2.2</ip>
+       <prefixlen>24</prefixlen>
+       <ipv6>10::2:2</ipv6>
+       <ipv6prefixlen>64</ipv6prefixlen>
+    </port>
+    <port name = 'eth1' num = '2'>
        <ip>192.168.3.1</ip>
        <prefixlen>24</prefixlen>
-       <mac>hello_mac</mac>
-    </port>
-    <port name = 'eth1' num = '1'>
-       <ip>192.168.4.1</ip>
-       <prefixlen>24</prefixlen>
-       <mac>world_mac</mac>
+       <ipv6>10::3:1</ipv6>
+       <ipv6prefixlen>64</ipv6prefixlen>
     </port>
 </switch>
 </switches>
