@@ -55,6 +55,26 @@ def ipv4_to_str( ip ):
     z = ip & 0xff
     return "%i.%i.%i.%i" % ( w, x, y, z )
 
+
+def ipv4_in_network(ip, network, prefix):
+    '''
+        return True if the ip address is in network/prefix,
+        ip and network should be in binary representation
+    '''
+    mask = ipv4_prefix_to_bin(prefix)
+    if (mask & ip) == (mask & network):
+        return True
+    else:
+        return False
+
+def ipv4_prefix_to_bin(prefix):
+    mask = 0
+    for i in xrange(prefix):
+        mask = (mask << 1) | 1
+    mask = mask << (32 - prefix)
+    return mask
+
+
 # ipv6
 
 IPV6_PACK_STR = '!8H'
@@ -94,11 +114,47 @@ def bin_to_ipv6(bin_addr):
     args = struct.unpack_from(IPV6_PACK_STR, bin_addr)
     return ':'.join('%x' % x for x in args)
     
+
+def ipv6_prefix_to_arg_list(prefix):
+    ffffs = prefix / 16
+    residue = prefix % 16
+    zeros = (128 - prefix) / 16
+    args = []
+    args += ffffs * [0xffff]
+    mask = 0
+    for i in xrange(residue):
+        mask = (mask << 1) | 1
+    mask = mask << (16 - residue)
+    args.append(mask)
+    args += [0] * zeros
+    return args
+
+def ipv6_in_network(ipv6, network, ipv6_prefix):
+    '''
+        return True if ipv6 is in network/prefix,
+        ipv6 and network should be in binary representation
+    '''
+    mask_arg = ipv6_prefix_to_arg_list(ipv6_prefix)
+    ipv6_arg = struct.unpack_from(IPV6_PACK_STR, ipv6)
+    network_arg = struct.unpack_from(IPV6_PACK_STR, network)
+
+    for mask, ipv6, network in zip(mask_arg, ipv6_arg, network_arg):
+        if mask & ipv6 != mask & network:
+            return False
+    return True
+            
+    
 if __name__ == '__main__':
     a = 3232236035
     print ipv4_to_str(a)
     print bin_to_ipv6(ipv6_to_bin('3f:10::1:2'))
     print bin_to_ipv6(ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c'))
+    ipv4 = ipv4_to_int('192.168.1.1')
+    ipv4_network = ipv4_to_int('192.168.1.254')
+    print ipv4_in_network(ipv4, ipv4_network, 24)
+    ipv6 = ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c')
+    ipv6_network = ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:ffff:ff3d')
+    print ipv6_in_network(ipv6, ipv6_network, 65)
 
 
 
