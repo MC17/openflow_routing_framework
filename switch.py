@@ -43,6 +43,7 @@ class Port(switches.Port):
 
         self.is_border = False  # if this is a border port of the network
         self.gateway = None
+        self.cost = float('inf')
 
     def to_dict(self):
         d = super(Port, self).to_dict()
@@ -81,3 +82,9 @@ class Switch(switches.Switch):
         d = config[self.name]
         for k, v in self.ports.iteritems():
             v.update_from_config(d)
+
+    def __eq__(self, other):
+        if self.dp.id == other.dp.id:
+            return True
+        else:
+            return False
