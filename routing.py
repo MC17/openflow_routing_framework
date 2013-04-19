@@ -12,6 +12,7 @@ from ryu.ofproto import ofproto_v1_0, nx_match
 from ryu.ofproto import ether, inet
 from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6,
                             tcp, udp)
+from ryu.lib import mac
 
 from switch import Port, Switch
 from util import read_cfg
@@ -93,6 +94,9 @@ class Routing(app_manager.RyuApp):
         else:
             switch.ports[port.port_no] = port
 
+        peer_switch = self.dpid_to_switch[port.peer_switch_dpid]
+        switch.peer_to_local_port[peer_switch] = port.peer_port_no
+
 
     @set_ev_handler(topology.event.EventLinkAdd)
     def link_add_handler(self, event):
@@ -113,8 +117,17 @@ class Routing(app_manager.RyuApp):
 
     @set_ev_handler(topology.event.EventLinkDelete)
     def link_delete_handler(self, event):
+        try:
+            switch_1 = self.dpid_to_switch[event.link.src.dpid]
+            switch_2 = self.dpid_to_switch[event.link.dst.dpid]
+            del switch_1.peer_to_local_port[switch_2]
+            del switch_2.peer_to_local_port[switch_1]
+        except KeyError:
+            return
+
         self._delete_link(event.link.src)
         self._delete_link(event.link.dst)
+
 
     @set_ev_handler(topology.event.EventPortAdd)
     def port_add_handler(self, event):
@@ -177,6 +190,9 @@ class Routing(app_manager.RyuApp):
             e.g. when a host need to send a packet to the gateway, it will
                 firstly send an ARP to get the MAC address of the gateway
         '''
+        # XXX
+        # should handle ARP reply about hosts,
+        # i.e. reply to _send_arp_request()
         print 'arp', arp_pkt
 
         if arp_pkt.opcode != arp.ARP_REQUEST:
@@ -268,6 +284,10 @@ class Routing(app_manager.RyuApp):
 
     def _handle_icmpv6(self, msg, pkt, icmpv6_pkt):
         print 'icmpv6', icmpv6_pkt
+        #XXX
+        # should handle icmpv6.ND_NEIGHBOR_ADVERT,
+        # i.e. replay of _send_icmp_NS()
+
         switch = self.dpid_to_switch[msg.datapath.id]
         in_port_no = msg.in_port
 
@@ -352,12 +372,181 @@ class Routing(app_manager.RyuApp):
         self.ip_to_mac[ip_layer.src] = (ether_layer.src, time_now)
         
 
-    def deploy_flow_entry(self, datapath, instruction, _4or6):
+    def deploy_flow_entry(self, msg, switch_list, _4or6):
         '''
             deploy flow entry into switch
         '''
-        # XXX
-        pass
+        # TODO
+        # this method and last_switch_out should be restructured
+        length = len(switch_list)
+        for i in xrange(length - 1):
+            this_switch = switch_list[i]
+            next_switch = switch_list[i + 1]
+            outport_no = this_switch[next_switch]
+            if _4or6 == 4:
+                ip_layer = self.find_packet('ipv4')
+            else:
+                ip_layer = self.find_packet('ipv6')
+
+            ip_dst = ip_layer.dst
+            outport = this_switch.ports[outport_no]
+            mac_src = outport.hw_addr
+            mac_dst = next_switch.ports[outport.peer_port_no].hw_addr
+            if _4or6 == 4:
+                # ip src exact match
+                wildcards = ofproto_v1_0.OFPFW_ALL
+                wildcards &= ~ofproto_v1_0.OFPFW_DL_TYPE
+                wildcards &= ~(0x3f << ofproto_v1_0.OFPFW_NW_DST_SHIFT)
+
+                match = dp.ofproto_parser.OFPMatch(
+                        # because of wildcards, parameters other than dl_type
+                        # and nw_dst could be any value
+                        wildcards = wildcards, in_port = 0, 
+                        dl_src = 0, dl_dst = 0, dl_vlan = 0, dl_vlan_pcp = 0,
+                        dl_type = ether.ETH_TYPE_IP, nw_tos = 0, nw_proto = 0,
+                        nw_src = 0, nw_dst = ip_dst, tp_src = 0,
+                        tp_dst = 0)
+            else:
+                rule = nx_match.ClsRule()
+                rule.set_dl_type(ether.ETH_TYPE_IPV6)
+                rule.set_ipv6_dst(ip_dst)
+
+            actions = []
+            actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
+                            mac_src))
+            actions.append(dp.ofproto_parser.OFPActionSetDlDst(
+                            mac_dst))
+            actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
+
+            if _4or6 == 4:
+                mod = dp.ofproto_parser.OFPFlowMod(
+                    datapath = this_switch.datapath, match = match,
+                    cookie = 0,
+                    command = dp.ofproto.OFPFC_MODIFY,
+                    idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
+                    hard_timeout = Routing.FLOW_HARD_TIMEOUT,
+                    out_port = outport_no, actions = actions)
+            else:
+                mod = dp.ofproto_parser.NXTFlowMod(
+                        datapath = this_switch.datapath, cookie = 0, 
+                        command = dp.ofproto.OFPFC_MODIFY,
+                        idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
+                        hard_timeout = Routing.FLOW_HARD_TIMEOUT,
+                        out_port = outport_no, rule = rule,
+                        actions = actions)
+
+            this_switch.datapath.send_msg(mod)
+
+        # send packet out from the first switch
+        switch = switch_list[0]
+        next_switch = switch_list[1]
+        outport_no = this_switch[next_switch]
+        if _4or6 == 4:
+            ip_layer = self.find_packet('ipv4')
+        else:
+            ip_layer = self.find_packet('ipv6')
+
+        ip_dst = ip_layer.dst
+        outport = this_switch.ports[outport_no]
+        mac_src = outport.hw_addr
+        mac_dst = next_switch.ports[outport.peer_port_no].hw_addr
+        actions = []
+        actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
+                        mac_src))
+        actions.append(dp.ofproto_parser.OFPActionSetDlDst(
+                        mac_dst))
+        actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
+                
+        out = dp.ofproto_parser.OFPPacketOut(
+            datapath = dp, buffer_id = msg.buffer_id,
+            in_port = msg.in_port, actions = actions)
+        
+        switch.datapath.send_msg(out)
+
+
+    def _send_arp_request(self, datapath, outport_no, dst_ip):
+        src_mac_addr = \
+            self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr
+        src_ip = \
+            self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ip
+        p = packet.Packet()
+        e = ethernet.ethernet(dst = mac.haddr_to_bin(mac.BROADCAST),
+            src = src_mac_addr, ethertype = ether.ETH_TYPE_ARP)
+        p.add_protocol(e)
+        a = arp.arp_ip(opcode = arp.ARP_REQUEST, src_mac = src_mac_addr,
+                src_ip = src_ip, dst_mac = mac.haddr_to_bin(mac.DONTCARE),
+                dst_ip = dst_ip)
+        p.add_protocol(a)
+        p.serialize()
+
+        datapath.send_packet_out(in_port = ofproto_v1_0.OFPP_NONE,
+            actions = [datapath.ofproto_parser.OFPActionOutput(outport_no)],
+            data = p.data)
+
+    def _generate_dst_for_NS(self, ipv6_addr):
+        '''
+            ICMPv6 neighbor solicitation destination addresses in ethernet
+            and IP layer are multicast addresses, and could be generated as:
+            
+            IPv6:
+                ff02::1:ffXX:XXXX
+            where XX is the last 24 bits of the target IPv6 address
+            
+            ethernet:
+                33:33:XX:XX:XX:XX
+            where XX is the last 32 bits of the IPv6 multicast address,
+            i.e. the address generated above, so the effective ethernet
+            multicast address in this scenario is:
+                33:33:ff:XX:XX:XX
+
+            Ref: RFC 2464, RFC 2373
+        '''
+        args = convert.ipv6_to_arg_list(ipv6_addr)
+
+        arg_6 = args[6] & 0x00ff
+        arg_7head = ('%04x' % args[7])[0:2]
+        arg_7tail = ('%04x' % args[7])[2:]
+        ethernet_str = '33:33:ff:' + str(arg_6) + ':' + arg_7head + ':' + \
+                       arg_7tail
+        ethernet_addr = convert.haddr_to_bin(ethernet_str)
+
+        args[6] = args[6] | 0xff00
+        args[0:6] = [0xff02,0,0,0,0,1]
+        ip_addr = convert.arg_list_to_ipv6_bin(args)
+        return ethernet_addr, ip_addr
+
+    def _send_icmp_NS(self, datapath, outport_no, dst_ip):
+        src_mac_addr = \
+            self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr
+        src_ip = \
+            self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ipv6
+        p = packet.Packet()
+        dst_mac, dst_ip_multicast = self._generate_dst_for_NS(dst_ip)
+        e = ethernet.ethernet(dst = dst_mac, src = src_mac_addr,
+                ethertype = ether.ETH_TYPE_IPV6)
+        ip6 = ipv6.ipv6(version = 6, traffic_class = 0, flow_label = 0,
+                # 4byte ICMP header, 4byte reserved, 16byte target address,
+                # 8byte "source link-layer address" option
+                # next header value for ICMPv6 is 58
+                payload_length = 32, nxt = 58, hop_limit = 255,
+                src = src_ip, dst = dst_ip_multicast)
+        # source link-layer address
+        sla_addr = icmpv6.nd_option_la(hw_addr = src_mac_addr)
+        # ns for neighbor solicit, res for reserved
+        ns = icmpv6.nd_neighbor(res = 0, dst = dst_ip,
+                    type_ = icmpv6.nd_neighbor.ND_OPTION_SLA,
+                    length = 1, data = sla_addr)
+        ic6 = icmpv6.icmpv6(type_ = icmpv6.ND_NEIGHBOR_SOLICIT, code = 0,
+                # checksum = 0 then ryu calculate for you
+                csum = 0, data = ns)
+        p.add_protocol(e)
+        p.add_protocol(ip6)
+        p.add_protocol(ic6)
+        p.serialize()
+        datapath.send_packet_out(in_port = ofproto_v1_0.OFPP_NONE,
+            actions = [datapath.ofproto_parser.OFPActionOutput(outport_no)],
+            data = p.data)
+
 
     def last_switch_out(self, msg, outport_no, _4or6):
         if _4or6 == 4:
@@ -369,8 +558,8 @@ class Routing(app_manager.RyuApp):
             mac_addr = self.ip_to_mac[ip_layer.dst]
         except KeyError:
             if _4or6 == 4:
-                self._send_arp_request(msg.datapath, outport_no,
-                                   ip_layer.dst)
+                self._send_arp_request(msg.datapath, outport_no, 
+                                        ip_layer.dst)
             else:
                 self._send_icmp_NS(msg.datapath, outport_no,
                                     ip_layer.dst)
@@ -423,8 +612,7 @@ class Routing(app_manager.RyuApp):
  
         out = dp.ofproto_parser.OFPPacketOut(
             datapath = dp, buffer_id = msg.buffer_id,
-            in_port = msg.in_port, actions = actions,
-            data = msg.data)
+            in_port = msg.in_port, actions = actions)
 
         dp.send_msg(mod)
         dp.send_msg(out)
@@ -445,24 +633,38 @@ class Routing(app_manager.RyuApp):
                         return self.dpid_to_switch[dpid], port_no
         return None, None
 
-    def _handle_ipv4(self, msg, pkt, protocol_pkt):
-        print 'ipv4', protocol_pkt
-        self._remember_mac_addr(pkt, 4)
+    def _handle_ip(self, msg, pkt, protocol_pkt):
+        print 'ip', protocol_pkt
 
-        try:
-            icmp_layer = self.find_packet(pkt, 'icmp')
-            if self._handle_icmp(msg, pkt, icmp_layer):
-                # if icmp method handles this packet successfully,
-                # further processing is not needed
-                return
-        except:
-            pass
+        if isinstance(protocol_pkt, ipv4.ipv4):
+            _4or6 = 4
+        else:
+            _4or6 = 6
+
+        self._remember_mac_addr(pkt, _4or6)
+
+        if _4or6 == 4:
+            try:
+                icmp_layer = self.find_packet(pkt, 'icmp')
+                if self._handle_icmp(msg, pkt, icmp_layer):
+                    # if icmp method handles this packet successfully,
+                    # further processing is not needed
+                    return
+            except:
+                pass
+        else: # _4or6 == 6
+            try:
+                icmpv6_layer = self.find_packet(pkt, 'icmpv6')
+                if self._handle_icmpv6(msg, pkt, icmpv6_layer):
+                    return
+            except:
+                pass
         
         src_switch = self.dpid_to_switch[msg.datapath.id]
         dst_switch, dst_port_no = self.find_switch_of_network(
                                         protocol_pkt.dst, 4)
         if src_switch == dst_switch:
-            self.last_switch_out(msg, dst_port_no, 4)
+            self.last_switch_out(msg, dst_port_no, _4or6)
             return
         elif dst_switch == None:
             # can't find destination in this domain
@@ -472,24 +674,19 @@ class Routing(app_manager.RyuApp):
 
         result = self.routing_algo.find_route(src_switch, dst_switch)
         if result:
-            self.deploy_flow_entry(msg.datapath, result, 4)
+            self.deploy_flow_entry(msg, result, _4or6)
         else:
             self.drop_pkt(msg)
+
+    def drop_pkt(self, msg):
+        # Note that this drop_pkt method only drops the packet,
+        # does not install any flow entries
+        dp = msg.datapath
+        out = dp.ofproto_parser.OFPPacketOut(datapath = dp,
+                buffer_id = msg.buffer_id, in_port = msg.in_port,
+                actions = [])
+        dp.send_msg(out)
         
-
-    def _handle_ipv6(self, msg, pkt, protocol_pkt):
-        print 'ipv6', protocol_pkt
-        self._remember_mac_addr(pkt, 6)
-
-        try:
-            icmpv6_layer = self.find_packet(pkt, 'icmpv6')
-            if self._handle_icmpv6(msg, pkt, icmpv6_layer):
-                return
-        except:
-            pass
-
-        result = self.routing_algo(msg, pkt, 6)
-        self.deploy_flow_entry(msg.datapath, result, 6)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, event):
@@ -500,9 +697,9 @@ class Routing(app_manager.RyuApp):
                 self._handle_arp(event.msg, pkt, p)
             # ipv4 and ipv6 also handle their corresponding icmp packets
             elif isinstance(p, ipv4.ipv4):
-                self._handle_ipv4(event.msg, pkt, p)
+                self._handle_ip(event.msg, pkt, p)
             elif isinstance(p, ipv6.ipv6):
-                self._handle_ipv6(event.msg, pkt, p)
+                self._handle_ip(event.msg, pkt, p)
             else:
                 # might be more classifications here, BGP/OSPF etc.
                 pass

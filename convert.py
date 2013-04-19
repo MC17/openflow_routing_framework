@@ -106,6 +106,8 @@ def ipv6_to_bin(ipv6):
     args = ipv6_to_arg_list(ipv6)
     return struct.pack(IPV6_PACK_STR, *args)
 
+def arg_list_to_ipv6_bin(args):
+    return struct.pack(IPV6_PACK_STR, *args)
 
 def bin_to_ipv6(bin_addr):
     '''
@@ -150,15 +152,9 @@ if __name__ == '__main__':
     print bin_to_ipv6(ipv6_to_bin('3f:10::1:2'))
     print bin_to_ipv6(ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c'))
     ipv4 = ipv4_to_int('192.168.1.1')
-    ipv4_network = ipv4_to_int('192.168.1.254')
+    ipv4_network = ipv4_to_int('192.168.2.254')
     print ipv4_in_network(ipv4, ipv4_network, 24)
     ipv6 = ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c')
-    ipv6_network = ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:ffff:ff3d')
+    ipv6_network = ipv6_to_bin('2013:da18:215:8f2:aa20:66ff:ffff:ff3d')
     print ipv6_in_network(ipv6, ipv6_network, 65)
-
-
-
-
-
-
 

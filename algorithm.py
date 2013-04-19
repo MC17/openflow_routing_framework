@@ -10,26 +10,16 @@ class Algorithm(object):
         '''
             sub classes should implement this method to calculate
             the route and return a list of switches, indicating the
-            path to destination.
-            the list should include the src_switch but exclude the
-            dst_switch(`[src, dst)`)
+            path to destination, i.e. [src, ..., dst]
          '''
         return None
 
     
-class Instruction(object):
-    '''
-        data structure returned by algorithm
-    '''
-
-    # XXX
-
-
 class Dijkstra(Algorithm):
 
     class Heap(object):
         '''
-            a minimal heap stores (switch, distance)
+            a minimal heap stores tuple (switch, distance)
         '''
         def __init__(self):
             self.heap = []
@@ -135,7 +125,7 @@ class Dijkstra(Algorithm):
 
             switch, dist = x
             if switch == dst:
-                path = []
+                path = [dst]
                 while previous[switch]:
                     path.insert(0, previous[switch])
                     switch = previous[switch]

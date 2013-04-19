@@ -68,8 +68,8 @@ class Switch(switches.Switch):
 
         self.name = None
         
-        # peer switch -> local port
-        self.peers = {}
+        # peer switch -> local port number
+        self.peer_to_local_port = {}
 
         # port_no -> Port, eg. ports[port_no] = Port
         # note that this variable overshadows super.ports
