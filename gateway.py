@@ -9,8 +9,8 @@ class Gateway(object):
         self.gw_ip = convert.ipv4_to_int(ip)
         self.gw_ipv6 = convert.ipv6_to_bin(ipv6)
         self.port_num = num
-        self.prefixlen = prefixlen
-        self.ipv6prefixlen = ipv6prefixlen
+        self.prefixlen = int(prefixlen)
+        self.ipv6prefixlen = int(ipv6prefixlen)
         self.mac = mac
 
     def __str__(self):

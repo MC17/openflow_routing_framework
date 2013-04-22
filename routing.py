@@ -162,15 +162,17 @@ class Routing(app_manager.RyuApp):
                 p = Port(port = port, dp = event.msg.datapath)
                 switch.ports[p.port_no] = p
 
+            p = switch.ports[p.port_no]
+
             if port_no == ofproto_v1_0.OFPP_LOCAL:
                 switch.name = port.name.rstrip('\x00')
             else:
                 # port.curr is a number of 32 bits, only used 12 bits in ovs
                 # represents current features of the port.
-                # LOCAL port doesn't have
+                # LOCAL port doesn't have a cost value
                 curr = port.curr & 0x7f	# get last 7 bits
                 p.cost = 64/curr
-                print p.cost
+                print 'cost:', p.cost
 
         switch.update_from_config(self.switch_cfg)
 
@@ -181,19 +183,39 @@ class Routing(app_manager.RyuApp):
         print "can't find target_packet!"
         return None
 
+    def _handle_arp_reply(self, msg, pkt, arp_pkt):
+        switch = self.dpid_to_switch[msg.datapath.id]
+        in_port_no = msg.in_port
+        gateway = switch.ports[in_port_no].gateway
+        pop_list = []
+        if gateway and gateway.gw_ip == arp_pkt.dst_ip:
+            self._remember_mac_addr(pkt, 4)
+            for i in xrange(len(switch.msg_buffer)):
+                msg, pkt, outport_no, _4or6 = switch.msg_buffer[i]
+                if self.last_switch_out(msg, pkt, outport_no, _4or6):
+                    pop_list.append(i)
+
+            pop_list.sort(reverse = True) # descending order
+            for i in pop_list:            # pop from tail to head
+                switch.msg_buffer.pop(i)
+
 
     def _handle_arp(self, msg, pkt, arp_pkt):
         '''
-            handles ARP request from host, about their gateways;
-            no need to handle other types of ARP packets, only request;
+            1)
+            handles ARP request from hosts, about their gateways;
             only works in IPv4 since IPv6 uses NDP(ICMPv6);
             e.g. when a host need to send a packet to the gateway, it will
                 firstly send an ARP to get the MAC address of the gateway
+            2)
+            handles ARP reply from hosts, and try to send packets currently
+            stored in switch.msg_buffer
         '''
-        # XXX
-        # should handle ARP reply about hosts,
-        # i.e. reply to _send_arp_request()
         print 'arp', arp_pkt
+
+        if arp_pkt.opcode == arp.ARP_REPLY:
+            self._handle_arp_reply(msg, pkt, arp_pkt)
+            return
 
         if arp_pkt.opcode != arp.ARP_REQUEST:
             return
@@ -284,14 +306,29 @@ class Routing(app_manager.RyuApp):
 
     def _handle_icmpv6(self, msg, pkt, icmpv6_pkt):
         print 'icmpv6', icmpv6_pkt
-        #XXX
-        # should handle icmpv6.ND_NEIGHBOR_ADVERT,
-        # i.e. replay of _send_icmp_NS()
 
         switch = self.dpid_to_switch[msg.datapath.id]
         in_port_no = msg.in_port
 
-        if icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
+        if icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_ADVERT:
+            gateway = switch.ports[in_port_no].gateway
+            pop_list = []
+            ipv6_pkt = self.find_packet(pkt, 'ipv6')
+            if gateway and gateway.gw_ipv6 == ipv6.dst:
+                self._remember_mac_addr(pkt, 6)
+                for i in xrange(len(switch.msg_buffer)):
+                    msg, pkt, outport_no, _4or6 = switch.msg_buffer[i]
+                    if self.last_switch_out(msg, pkt, outport_no, _4or6):
+                        pop_list.append(i)
+
+                pop_list.sort(reverse = True)
+                for i in pop_list:
+                    switch.msg_buffer.pop(i)
+
+                return True
+            return False
+
+        elif icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
             port = switch.ports[in_port_no]
             if port.gateway and icmpv6_pkt.data.dst != port.gateway.gw_ipv6:
                 return False
@@ -367,6 +404,9 @@ class Routing(app_manager.RyuApp):
         ether_layer = self.find_packet(packet, 'ethernet')
         if _4or6 == 4:
             ip_layer = self.find_packet(packet, 'ipv4')
+            if ip_layer == None:
+                ip_layer = self.find_packet(packet, 'arp')
+                ip_layer.src = ip_layer.src_ip
         else:
             ip_layer = self.find_packet(packet, 'ipv6')
         self.ip_to_mac[ip_layer.src] = (ether_layer.src, time_now)
@@ -470,11 +510,11 @@ class Routing(app_manager.RyuApp):
         src_ip = \
             self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ip
         p = packet.Packet()
-        e = ethernet.ethernet(dst = mac.haddr_to_bin(mac.BROADCAST),
+        e = ethernet.ethernet(dst = mac.BROADCAST,
             src = src_mac_addr, ethertype = ether.ETH_TYPE_ARP)
         p.add_protocol(e)
         a = arp.arp_ip(opcode = arp.ARP_REQUEST, src_mac = src_mac_addr,
-                src_ip = src_ip, dst_mac = mac.haddr_to_bin(mac.DONTCARE),
+                src_ip = src_ip, dst_mac = mac.DONTCARE,
                 dst_ip = dst_ip)
         p.add_protocol(a)
         p.serialize()
@@ -548,25 +588,29 @@ class Routing(app_manager.RyuApp):
             data = p.data)
 
 
-    def last_switch_out(self, msg, outport_no, _4or6):
+    def last_switch_out(self, msg, pkt, outport_no, _4or6):
         if _4or6 == 4:
-            ip_layer = self.find_packet('ipv4')
+            ip_layer = self.find_packet(pkt, 'ipv4')
         else:
-            ip_layer = self.find_packet('ipv6')
+            ip_layer = self.find_packet(pkt, 'ipv6')
+
+        dp = msg.datapath
+        switch = self.dpid_to_switch[dp.id]
 
         try:
-            mac_addr = self.ip_to_mac[ip_layer.dst]
+            # TODO introduce ARP timeout
+            mac_addr = self.ip_to_mac[ip_layer.dst][0]
         except KeyError:
+            # don't know MAC address yet, send ARP/ICMP message
+            # and temporarily store the packets
             if _4or6 == 4:
                 self._send_arp_request(msg.datapath, outport_no, 
                                         ip_layer.dst)
             else:
                 self._send_icmp_NS(msg.datapath, outport_no,
                                     ip_layer.dst)
-            return
-
-        dp = msg.datapath
-        switch = self.dpid_to_switch[dp.id]
+            switch.msg_buffer.append( (msg, pkt, outport_no, _4or6) )
+            return False
 
         if _4or6 == 4:
             # ip src exact match
@@ -616,6 +660,7 @@ class Routing(app_manager.RyuApp):
 
         dp.send_msg(mod)
         dp.send_msg(out)
+        return True
             
 
     def find_switch_of_network(self, dst_addr, _4or6):
@@ -625,11 +670,20 @@ class Routing(app_manager.RyuApp):
                     if port.gateway and convert.ipv4_in_network(dst_addr,
                                     port.gateway.gw_ip, 
                                     port.gateway.prefixlen):
+                        if dst_addr == port.gateway.gw_ip:
+                            return self.dpid_to_switch[dpid], \
+                                    ofproto_v1_0.OFPP_LOCAL
                         return self.dpid_to_switch[dpid], port_no
                 else:
+                    print convert.bin_to_ipv6(dst_addr)
+                    if port.gateway:
+                        print convert.bin_to_ipv6(port.gateway.gw_ipv6)
                     if port.gateway and convert.ipv6_in_network(dst_addr,
                                     port.gateway.gw_ipv6,
                                     port.gateway.ipv6prefixlen):
+                        if dst_addr == port.gateway.gw_ipv6:
+                            return self.dpid_to_switch[dpid], \
+                                    ofproto_v1_0.OFPP_LOCAL
                         return self.dpid_to_switch[dpid], port_no
         return None, None
 
@@ -662,15 +716,22 @@ class Routing(app_manager.RyuApp):
         
         src_switch = self.dpid_to_switch[msg.datapath.id]
         dst_switch, dst_port_no = self.find_switch_of_network(
-                                        protocol_pkt.dst, 4)
-        if src_switch == dst_switch:
-            self.last_switch_out(msg, dst_port_no, _4or6)
+                                        protocol_pkt.dst, _4or6)
+
+        if dst_port_no == ofproto_v1_0.OFPP_LOCAL:
+            # should be handled by ICMP/ARP etc.
             return
-        elif dst_switch == None:
+
+        if dst_switch == None:
             # can't find destination in this domain
             # raise an event to `moudle B`
+            # drop pkt & return by now
             # XXX
-            pass
+            self.drop_pkt(msg)
+            return
+        elif src_switch == dst_switch:
+            self.last_switch_out(msg, pkt, dst_port_no, _4or6)
+            return
 
         result = self.routing_algo.find_route(src_switch, dst_switch)
         if result:
@@ -692,9 +753,13 @@ class Routing(app_manager.RyuApp):
     def packet_in_handler(self, event):
         data = event.msg.data
         pkt = packet.Packet(data)
+        # TODO
+        # handle protocols in reverse order
         for p in pkt.protocols:
             if isinstance(p, arp.arp):
                 self._handle_arp(event.msg, pkt, p)
+            elif isinstance(p, icmpv6.icmpv6):
+                self._handle_icmpv6(event.msg, pkt, p)
             # ipv4 and ipv6 also handle their corresponding icmp packets
             elif isinstance(p, ipv4.ipv4):
                 self._handle_ip(event.msg, pkt, p)

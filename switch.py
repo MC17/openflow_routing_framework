@@ -57,7 +57,7 @@ class Port(switches.Port):
             self.gateway = config[self.port_no]
         except KeyError:
             pass
-        print self.gateway
+        print self.port_no, 'gateway:', self.gateway
 
 
 class Switch(switches.Switch):
@@ -75,6 +75,10 @@ class Switch(switches.Switch):
         # note that this variable overshadows super.ports
         self.ports = {}
 
+        # temporarily store packets we don't know MAC address yet.
+        # 
+        self.msg_buffer = []
+
     def update_from_config(self, config):
         if self.name == None:
             return
@@ -84,7 +88,9 @@ class Switch(switches.Switch):
             v.update_from_config(d)
 
     def __eq__(self, other):
-        if self.dp.id == other.dp.id:
-            return True
-        else:
+        try:
+            if self.dp.id == other.dp.id:
+                return True
+        except:
             return False
+        return False

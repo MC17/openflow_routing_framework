@@ -107,10 +107,10 @@ class Dijkstra(Algorithm):
         except:
             pass
 
-        pq = Heap()
+        pq = Dijkstra.Heap()
         distance = {}   # distance[switch] = distance
         previous = {}   # previous[switch] = switch/None
-        for dpid, switch in self.dpid_to_switch.interitems():
+        for dpid, switch in self.dpid_to_switch.iteritems():
             if switch != src:
                 distance[switch] = float('inf')
             else:
