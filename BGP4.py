@@ -8,21 +8,21 @@ BGP4_NOTIFICATION = 3
 #BGP4_ROUTE_REFRESH = 5
 
 class bgp4(packet_base.PacketBase):
+
     _PACK_STR = '!16sHB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
     _BGP4_TYPES = {}
-
     
     @staticmethod
-    def register_bgp4_type(*args):
+    def register_bgp4_type(*args):        
         def _register_bgp4_type(cls):
             for type_ in args:
                 bgp4._BGP4_TYPES[type_] = cls
             return cls
-        return _register_bgp4_type
+        return _register_bgp4_type        
 
-
-    def __init__(self, marker,length, type_, data=None):
+    def __init__(self, marker, length, type_, data=None):
+        #length default value is 0
         super(bgp4, self).__init__()
         self.marker = marker
         self.length = length
@@ -61,8 +61,8 @@ class bgp4(packet_base.PacketBase):
 
             if self.length == 0:
                 self.length = len(hdr)
-                struct.pack_into('!H', hdr, 16, self.length)
-            return hdr
+                struct.pack_into('!H', hdr, 16, self.length)                
+        return hdr
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
 class bgp4_open(object):
@@ -73,6 +73,8 @@ class bgp4_open(object):
 
     #_CAPABILITY_ADVERTISEMENT = 2
     _CAPABILITY_ADVERTISEMENT_MPE = 1
+    _CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH = 2
+
 
     @staticmethod
     def register_capability_advertisement_type(*args):
@@ -107,17 +109,14 @@ class bgp4_open(object):
        
         msg.data = []
         if len(buf) > offset:
-            #capability advertisement  
+            #capability advertisement  2
             length = msg.opt_para_len - 2      
             while length >= 2:
                     code,len_ = struct.unpack_from('!BB')
-                    offset += 2
-                    length -= 2
                     cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)            
-                    if cls_ and len_ != 0:
+                    if cls_:
                         msg.data.append(cls_.parser(buf, offset))
-                        offset += len_
-                        length -= len_                 
+                    length -= (len_ + 2)              
 
         return msg
     
@@ -134,20 +133,21 @@ class bgp4_open(object):
                 cls_ = cls._CAPABILITY_ADVERTISEMENT.get(para.code, None)
                 if cls_:
                     hdr += cls_.serialize()              
-                    self.para_len += para.length + 2
+                    self.para_len += cls_._MIN_LEN
 
-        self.opt_para_len = self.para_len + 2 
+        self.opt_para_len = self.para_len + 2
         struct.pack_into('!B', hdr, 9, self.opt_para_len)
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_MPE)
-class capability_advertisement_multi_protocol_extentions(object):
+class capability_advertisement_multi_protocal_extentions(object):
 
-    _PACK_STR = '!HBB'
+    _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,addr_family, res = 0x00,sub_addr_family = None):
+    def __init__(self, addr_family, res, sub_addr_family):
+        #res = 0x00
         self.code = bgp4_open._CAPABILITY_ADVERTISEMENT_MPE
         self.length = self._MIN_LEN
         self.addr_family = addr_family
@@ -156,16 +156,37 @@ class capability_advertisement_multi_protocol_extentions(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (addr_family,res,sub_addr_family) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        msg = cls(addr_family, res, addr_family)
+        (code, length, addr_family, res, sub_addr_family) = struct.unpack_from(cls._PACK_STR, buf, offset)
+        msg = cls(code, length, addr_family, res, addr_family)
+        #offset has no meaning here ?
         offset += cls._MIN_LEN 
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack('!BB', self.code, self.length))
-        hdr += bytearray(struct.pack(self._PACK_STR, self.hw_src, self.res, self.sub_addr_family))
+        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.hw_src, self.res, self.sub_addr_family))
         return hdr
-    
+
+@bgp4_open.register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH) 
+class capability_advertisement_route_refresh(object):
+
+    _PACK_STR = '!BB'
+    _MIN_LEN = struct.calcsize(_PACK_STR)
+
+    def __init__(self):
+        self.code = bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH
+        self.length = 0
+        
+    @classmethod
+    def parser(cls, buf, offset):
+        (code, length) = struct.unpack_from(cls._PACK_STR, buf, offset)
+        msg = cls(code, length)
+        offset += cls._MIN_LEN 
+        return msg
+
+    def serialize(self):
+        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length))
+        return hdr
+
 @bgp4.register_bgp4_type(BGP4_UPDATE)
 class bgp4_update(object):
 
@@ -175,6 +196,7 @@ class bgp4_update(object):
 
     _ORIGIN = 1
     _AS_PATH = 2
+    _MULTI_EXIT_DISK = 4
     _MP_REACH_NLRI = 14
     _MP_UNREACH_NLRI = 15
 
@@ -231,7 +253,7 @@ class bgp4_update(object):
             struct.pack_into('!H', hdr, 2, self.path_attr_len)
 
         return hdr
-
+       
 @bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
 class origin(object):
 
@@ -248,7 +270,7 @@ class origin(object):
     def parser(cls, buf, offset):
         (flag, code, length, value) = struct.unpack_from( self._PACK_STR+'B', buf, offset)
         offset += cls._MIN_LEN + 1
-        msg = cls( flag, code, length, offset)
+        msg = cls( flag, code, length, value)
         return msg
 
     def serialize(self):
@@ -257,7 +279,8 @@ class origin(object):
 
 @bgp4_update.register_path_attributes_type(bgp4_update._AS_PATH)
 class as_path(object):
-    def __init__(self,flag = 0x80, code = bgp4_update._AS_PATH, length = 0, as_type = None, as_len = None, as_values =[]):
+    def __init__( self,flag, code, length, as_type, as_len, as_values =[]):
+        #flag = 0x80, length = 0,code = bgp4_update._AS_PATH
         self.flag = flag
         self.code = code
         self.length = length
@@ -303,12 +326,35 @@ class as_path(object):
         struct.pack_into('!'+self._PACK_STR[3], self.length)
         return hdr
 
+@bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
+class multi_exit_disk(object):
+
+    _PACK_STR = 'BBB'
+    _MIN_LEN = struct.calcsize(_PACK_STR)
+
+    def __init__(self,flag = 0x80, code = bgp4_update._MULTI_EXIT_DISK, length = 1, value = 0):
+       
+        self.flag = flag
+        self.code = code
+        self.length = length
+        self.value = value
+
+    def parser(cls, buf, offset):
+        (flag, code, length, value) = struct.unpack_from( self._PACK_STR+'I', buf, offset)
+        offset += cls._MIN_LEN + 4
+        msg = cls( flag, code, length, value)
+        return msg
+
+    def serialize(self):
+        hdr = bytearray(struct.pack( self._PACK_STR+'I', self.flag, self.code, self.length, self.value))
+        return hdr
 
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_REACH_NLRI)
 class mp_reach_nlri(object):
 
-    def __init__(self,flag = 0x90, code = bgp4_update._MP_REACH_NLRI, length = 0, addr_family = None, sub_addr_family = None, next_hop_len = 0, next_hop = None, num_of_snpas = 0, snpas = [], nlri = []):
+    def __init__( self, flag, code, length, addr_family, sub_addr_family, next_hop_len = 0, next_hop = None, num_of_snpas = 0, snpas = [], nlri = []):
+        #flag = 0x90, code = bgp4_update._MP_REACH_NLRI
         self.flag = flag
         self.code = code
         self.length = length
@@ -431,7 +477,8 @@ class mp_reach_nlri(object):
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
 
-    def __init__(self,flag = 0x90, code = bgp4_update._MP_UNREACH_NLRI, length = 0, addr_family = None, sub_addr_family = None, wd_routes = []):
+    def __init__( self, flag, code, length, addr_family, sub_addr_family, wd_routes = []):
+        #flag = 0x90,code = bgp4_update._MP_UNREACH_NLRI
         self.flag = flag
         self.code = code
         self.length = length
@@ -524,8 +571,3 @@ class bgp4_notification(object):
         if data != None:
             hdr += bytearray(self.data)
         return hdr
-'''
-@bgp4.register_bgp4_type(BGP4_KEEPALIVE)
-class bgp4_keepalive(object):
-    pass
-'''
