@@ -160,9 +160,9 @@ class Routing(app_manager.RyuApp):
         for port_no, port in event.msg.ports.iteritems():
             if port_no not in switch.ports:
                 p = Port(port = port, dp = event.msg.datapath)
-                switch.ports[p.port_no] = p
+                switch.ports[port_no] = p
 
-            p = switch.ports[p.port_no]
+            p = switch.ports[port_no]
 
             if port_no == ofproto_v1_0.OFPP_LOCAL:
                 switch.name = port.name.rstrip('\x00')
@@ -331,6 +331,8 @@ class Routing(app_manager.RyuApp):
         elif icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
             port = switch.ports[in_port_no]
             if port.gateway and icmpv6_pkt.data.dst != port.gateway.gw_ipv6:
+                print convert.bin_to_ipv6(icmpv6_pkt.data.dst)
+                print convert.bin_to_ipv6(port.gateway.gw_ipv6)
                 return False
             #send a ND_NEIGHBOR_REPLY packet
             ether_layer = self.find_packet(pkt, 'ethernet')
@@ -360,6 +362,7 @@ class Routing(app_manager.RyuApp):
                         [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
             print 'send a NA packet'
+            return True
         elif icmpv6_pkt.type_ == icmpv6.ICMPV6_ECHO_REQUEST:
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
             
@@ -369,7 +372,7 @@ class Routing(app_manager.RyuApp):
                     need_reply = True
                     break
             if not need_reply:
-                return
+                return False
             
             ether_layer = self.find_packet(pkt, 'ethernet')
             ether_dst = ether_layer.src
@@ -392,8 +395,9 @@ class Routing(app_manager.RyuApp):
                         [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
             print 'send a ping6 reply packet'
+            return True
 
-        return True
+        return False
 
     def _remember_mac_addr(self, packet, _4or6):
         '''
@@ -541,7 +545,7 @@ class Routing(app_manager.RyuApp):
 
             Ref: RFC 2464, RFC 2373
         '''
-        args = convert.ipv6_to_arg_list(ipv6_addr)
+        args = convert.bin_to_ipv6_arg_list(ipv6_addr)
 
         arg_6 = args[6] & 0x00ff
         arg_7head = ('%04x' % args[7])[0:2]
@@ -571,7 +575,7 @@ class Routing(app_manager.RyuApp):
                 payload_length = 32, nxt = 58, hop_limit = 255,
                 src = src_ip, dst = dst_ip_multicast)
         # source link-layer address
-        sla_addr = icmpv6.nd_option_la(hw_addr = src_mac_addr)
+        sla_addr = icmpv6.nd_option_la(hw_src = src_mac_addr)
         # ns for neighbor solicit, res for reserved
         ns = icmpv6.nd_neighbor(res = 0, dst = dst_ip,
                     type_ = icmpv6.nd_neighbor.ND_OPTION_SLA,
@@ -629,7 +633,7 @@ class Routing(app_manager.RyuApp):
         else:
             rule = nx_match.ClsRule()
             rule.set_dl_type(ether.ETH_TYPE_IPV6)
-            rule.set_ipv6_dst(ip_layer.dst)
+            rule.set_ipv6_dst(convert.bin_to_ipv6_arg_list(ip_layer.dst))
 
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
@@ -675,15 +679,13 @@ class Routing(app_manager.RyuApp):
                                     ofproto_v1_0.OFPP_LOCAL
                         return self.dpid_to_switch[dpid], port_no
                 else:
-                    print convert.bin_to_ipv6(dst_addr)
-                    if port.gateway:
-                        print convert.bin_to_ipv6(port.gateway.gw_ipv6)
                     if port.gateway and convert.ipv6_in_network(dst_addr,
                                     port.gateway.gw_ipv6,
                                     port.gateway.ipv6prefixlen):
                         if dst_addr == port.gateway.gw_ipv6:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL
+                        print 'out:', convert.bin_to_ipv6(dst_addr), port_no
                         return self.dpid_to_switch[dpid], port_no
         return None, None
 
@@ -758,8 +760,6 @@ class Routing(app_manager.RyuApp):
         for p in pkt.protocols:
             if isinstance(p, arp.arp):
                 self._handle_arp(event.msg, pkt, p)
-            elif isinstance(p, icmpv6.icmpv6):
-                self._handle_icmpv6(event.msg, pkt, p)
             # ipv4 and ipv6 also handle their corresponding icmp packets
             elif isinstance(p, ipv4.ipv4):
                 self._handle_ip(event.msg, pkt, p)

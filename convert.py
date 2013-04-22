@@ -115,6 +115,15 @@ def bin_to_ipv6(bin_addr):
     '''
     args = struct.unpack_from(IPV6_PACK_STR, bin_addr)
     return ':'.join('%x' % x for x in args)
+
+def bin_to_ipv6_arg_list(bin_addr):
+    '''
+        convert binary representation to 8H arg list
+    '''
+    args = struct.unpack_from(IPV6_PACK_STR, bin_addr)
+    args = list(args)
+    print 'ipv6 arg list:', args
+    return args
     
 
 def ipv6_prefix_to_arg_list(prefix):
