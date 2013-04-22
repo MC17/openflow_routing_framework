@@ -8,12 +8,12 @@ BGP4_NOTIFICATION = 3
 #BGP4_ROUTE_REFRESH = 5
 
 class bgp4(packet_base.PacketBase):
-	_PACK_STR = '!16sHB'
-	_MIN_LEN = struct.calcsize(_PACK_STR)
-	_BGP4_TYPES = {}
+    _PACK_STR = '!16sHB'
+    _MIN_LEN = struct.calcsize(_PACK_STR)
+    _BGP4_TYPES = {}
 
     
-	@staticmethod
+    @staticmethod
     def register_bgp4_type(*args):
         def _register_bgp4_type(cls):
             for type_ in args:
@@ -81,7 +81,7 @@ class bgp4_open(object):
                 bgp4_open._CAPABILITY_ADVERTISEMENT[type_] = cls
             return cls
         return _register_capability_advertisement_type
-	
+    
      #using capabilities adverstisement in it's optional parameters' field
     def __init__(self, version, my_as, hold_time, bgp_identifier,opt_para_len = 0,type_ = 2, para_len = 0, data = []):
         self.version = version
@@ -141,13 +141,13 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
-@register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_MPE) 
-capability_advertisement_multi_protocol_extentions(object)
+@bgp4_open.register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_MPE)
+class capability_advertisement_multi_protocol_extentions(object):
 
     _PACK_STR = '!HBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,addr_family, res = 0x00,sub_addr_family):
+    def __init__(self,addr_family, res = 0x00,sub_addr_family = None):
         self.code = bgp4_open._CAPABILITY_ADVERTISEMENT_MPE
         self.length = self._MIN_LEN
         self.addr_family = addr_family
@@ -157,7 +157,7 @@ capability_advertisement_multi_protocol_extentions(object)
     @classmethod
     def parser(cls, buf, offset):
         (addr_family,res,sub_addr_family) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        msg = cls(,addr_family,res,addr_family)
+        msg = cls(addr_family, res, addr_family)
         offset += cls._MIN_LEN 
         return msg
 
@@ -232,7 +232,7 @@ class bgp4_update(object):
 
         return hdr
 
-@register_path_attributes_type(bgp4_update._ORIGIN):
+@bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
 class origin(object):
 
     _PACK_STR = 'BBB'
@@ -255,9 +255,9 @@ class origin(object):
         hdr = bytearray(struct.pack( self._PACK_STR+'B', self.flag, self.code, self.length, self.value))
         return hdr
 
-@register_path_attributes_type(bgp4_update._AS_PATH):
+@bgp4_update.register_path_attributes_type(bgp4_update._AS_PATH)
 class as_path(object):
-    def __init__(self,flag = 0x80, code = bgp4_update._AS_PATH, length = 0, as_type, as_len, as_values =[]):
+    def __init__(self,flag = 0x80, code = bgp4_update._AS_PATH, length = 0, as_type = None, as_len = None, as_values =[]):
         self.flag = flag
         self.code = code
         self.length = length
@@ -305,10 +305,10 @@ class as_path(object):
 
 
 
-@register_path_attributes_type(bgp4_update._MP_REACH_NLRI):
+@bgp4_update.register_path_attributes_type(bgp4_update._MP_REACH_NLRI)
 class mp_reach_nlri(object):
 
-    def __init__(self,flag = 0x90, code = bgp4_update._MP_REACH_NLRI, length = 0, addr_family, sub_addr_family, next_hop_len = 0, next_hop = None, num_of_snpas = 0, snpas = [], nlri = []):
+    def __init__(self,flag = 0x90, code = bgp4_update._MP_REACH_NLRI, length = 0, addr_family = None, sub_addr_family = None, next_hop_len = 0, next_hop = None, num_of_snpas = 0, snpas = [], nlri = []):
         self.flag = flag
         self.code = code
         self.length = length
@@ -428,10 +428,10 @@ class mp_reach_nlri(object):
 
         return hdr
 
-@register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI):
+@bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
 
-    def __init__(self,flag = 0x90, code = bgp4_update._MP_UNREACH_NLRI, length = 0, addr_family, sub_addr_family, wd_routes = []):
+    def __init__(self,flag = 0x90, code = bgp4_update._MP_UNREACH_NLRI, length = 0, addr_family = None, sub_addr_family = None, wd_routes = []):
         self.flag = flag
         self.code = code
         self.length = length
@@ -503,7 +503,7 @@ class mp_unreach_nlri(object):
 class bgp4_notification(object):
 
     _PACK_STR = '!BB'
-    _MIN_LEN = struct.calcsize(self._PACK_STR)
+    _MIN_LEN = struct.calcsize(_PACK_STR)
 
     def __init__(self, err_code, err_subcode, data=None):
         self.err_code = err_code
@@ -527,5 +527,5 @@ class bgp4_notification(object):
 '''
 @bgp4.register_bgp4_type(BGP4_KEEPALIVE)
 class bgp4_keepalive(object):
-	pass
+    pass
 '''
