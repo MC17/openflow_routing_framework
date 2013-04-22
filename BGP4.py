@@ -72,8 +72,9 @@ class bgp4_open(object):
 
 
     #_CAPABILITY_ADVERTISEMENT = 2
-    _CAPABILITY_ADVERTISEMENT_MPE = 1
-    _CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH = 2
+    _MULTI_PROTOCAL_EXTENTION = 1
+    _ROUTE_REFRESH = 2
+    _SUPPORT_FOR_4_OCTETS_AS_NUM = 65
 
 
     @staticmethod
@@ -112,7 +113,7 @@ class bgp4_open(object):
             #capability advertisement  2
             length = msg.opt_para_len - 2      
             while length >= 2:
-                    code,len_ = struct.unpack_from('!BB')
+                    code,len_ = struct.unpack_from('!BB', buf, offset)
                     cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)            
                     if cls_:
                         msg.data.append(cls_.parser(buf, offset))
@@ -140,16 +141,16 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
-@bgp4_open.register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_MPE)
-class capability_advertisement_multi_protocal_extentions(object):
+@bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCAL_EXTENTION)
+class multi_protocal_extention(object):
 
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self, addr_family, res, sub_addr_family):
-        #res = 0x00
-        self.code = bgp4_open._CAPABILITY_ADVERTISEMENT_MPE
-        self.length = self._MIN_LEN
+    def __init__(self, code, length,addr_family, res, sub_addr_family):
+        #res = 0x00 code = bgp4_open._CAPABILITY_ADVERTISEMENT_MPE length = self._MIN_LEN
+        self.code = code
+        self.length =length
         self.addr_family = addr_family
         self.res = res
         self.sub_addr_family = sub_addr_family 
@@ -158,33 +159,53 @@ class capability_advertisement_multi_protocal_extentions(object):
     def parser(cls, buf, offset):
         (code, length, addr_family, res, sub_addr_family) = struct.unpack_from(cls._PACK_STR, buf, offset)
         msg = cls(code, length, addr_family, res, addr_family)
-        #offset has no meaning here ?
-        offset += cls._MIN_LEN 
         return msg
 
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.hw_src, self.res, self.sub_addr_family))
         return hdr
 
-@bgp4_open.register_capability_advertisement_type(bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH) 
+@bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH) 
 class capability_advertisement_route_refresh(object):
 
     _PACK_STR = '!BB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self):
-        self.code = bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH
-        self.length = 0
+    def __init__(self, code, length):
+        #code = bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH length = 0
+        self.code = code
+        self.length = length
         
     @classmethod
     def parser(cls, buf, offset):
         (code, length) = struct.unpack_from(cls._PACK_STR, buf, offset)
         msg = cls(code, length)
-        offset += cls._MIN_LEN 
         return msg
 
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length))
+        return hdr
+
+@bgp4_open.register_capability_advertisement_type(bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM) 
+class support_4_octets_as_num(object):
+
+    _PACK_STR = '!BB'
+    _MIN_LEN = struct.calcsize(_PACK_STR)
+
+    def __init__(self, code, length, as_num):
+        #code = bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM length = 4
+        self.code = code 
+        self.length = length
+        self.as_num = as_num
+        
+    @classmethod
+    def parser(cls, buf, offset):
+        (code, length, as_num) = struct.unpack_from(cls._PACK_STR+'I', buf, offset)
+        msg = cls(code, length, as_num)
+        return msg
+
+    def serialize(self):
+        hdr = bytearray(struct.pack(self._PACK_STR+'I', self.code, self.length, self.as_num))
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
