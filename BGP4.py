@@ -47,7 +47,7 @@ class bgp4(packet_base.PacketBase):
     def serialize(self, payload, prev):
         marker_ = None
         if self.marker == 1:
-            marker_ = struct.pack('!4I',*[(self.marker)<<32-1]*4)
+            marker_ = struct.pack('!4I',*[(self.marker<<32)-1]*4)
         elif self.marker == 0:
             marker_ = struct.pack('!4I',*[self.marker]*4) 
 
