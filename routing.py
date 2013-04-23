@@ -457,7 +457,7 @@ class Routing(app_manager.RyuApp):
             else:
                 rule = nx_match.ClsRule()
                 rule.set_dl_type(ether.ETH_TYPE_IPV6)
-                rule.set_ipv6_dst(ip_dst)
+                rule.set_ipv6_dst(convert.bin_to_ipv6_arg_list(ip_dst))
 
             actions = []
             actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
