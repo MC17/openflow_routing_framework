@@ -72,7 +72,7 @@ class bgp4_open(object):
 
 
     #_CAPABILITY_ADVERTISEMENT = 2
-    _MULTI_PROTOCAL_EXTENTION = 1
+    _MULTI_PROTOCOL_EXTENSION = 1
     _ROUTE_REFRESH = 2
     _SUPPORT_FOR_4_OCTETS_AS_NUM = 65
 
@@ -141,8 +141,8 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
-@bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCAL_EXTENTION)
-class multi_protocal_extention(object):
+@bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCOL_EXTENSION)
+class multi_protocol_extension(object):
 
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
