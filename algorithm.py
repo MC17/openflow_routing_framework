@@ -130,10 +130,14 @@ class Dijkstra(Algorithm):
                     path.insert(0, previous[switch])
                     switch = previous[switch]
                 self.path[src, dst] = path
+                print 'path calculated:'
+                for i in path:
+                    print i
                 return path
 
             for port_no, port in switch.ports.iteritems():
-                peer_switch = self.dpid_to_switch[port.peer_switch_dpid]
+                peer_switch = self.dpid_to_switch.get(port.peer_switch_dpid,
+                                                      None)
                 if peer_switch == None:
                     continue
                 if dist + port.cost < distance[peer_switch]:

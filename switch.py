@@ -11,6 +11,9 @@ class Port(switches.Port):
         # if port + dp, then
         # port is ofp_phy_port and dp is the datapath of this port
 
+        self.peer_switch_dpid = None
+        self.peer_port_no = None
+
         if isinstance(port, Port_type):
             # init switches.Port variables
             self.dpid = port.dpid
@@ -76,14 +79,21 @@ class Switch(switches.Switch):
         self.ports = {}
 
         # temporarily store packets we don't know MAC address yet.
-        # 
         self.msg_buffer = []
+
+        # ip_to_mac[ip_addr] = (mac_addr, time_stamp)
+        # maintains ARP table
+        self.ip_to_mac = {}
 
     def update_from_config(self, config):
         if self.name == None:
             return
 
-        d = config[self.name]
+        try:
+            d = config[self.name]
+        except KeyError:
+            print 'WARNING', self.name, 'is not configured'
+            return
         for k, v in self.ports.iteritems():
             v.update_from_config(d)
 
@@ -94,3 +104,6 @@ class Switch(switches.Switch):
         except:
             return False
         return False
+
+    def __str__(self):
+        return '<Switch: %s>' % self.name
