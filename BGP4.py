@@ -140,7 +140,7 @@ class bgp4_open(object):
         return hdr
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCOL_EXTENSION)
-class multi_protocol_extention(object):
+class multi_protocol_extension(object):
 
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
