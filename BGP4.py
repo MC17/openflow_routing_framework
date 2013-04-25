@@ -60,7 +60,7 @@ class bgp4(packet_base.PacketBase):
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
 class bgp4_open(object):
-    _PACK_STR = '!BHHIB'
+    _PACK_STR = '!BHH4sB'
     _MIN_LEN = struct.calcsize(_PACK_STR)   
     _CAPABILITY_ADVERTISEMENT = {}
 
@@ -160,7 +160,7 @@ class multi_protocol_extension(object):
         return hdr
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH) 
-class capability_advertisement_route_refresh(object):
+class route_refresh(object):
 
     _PACK_STR = '!BB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
@@ -235,20 +235,19 @@ class bgp4_update(object):
         self.nlri = nlri  
         
     def parser(cls, buf, offset):
+
+        #(wd_rout_len,path_attr_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
         wd_rout_len = struct.unpack_from('!H', buf, offset)
         offset += 2
-
-        if wd_rout_len > 0:
-            # unpack from packet but we don't handle this part
-            wd_rout = struct.unpack_from('!%ds' % wd_rout_len, buf, offset)
+        # we don't handle wd_rote here,just skip it
+        if wd_rout_len != 0:
             offset += wd_rout_len
-
         path_attr_len = struct.unpack_from('!H', buf, offset)
         offset += 2
 
         msg = cls(wd_rout_len, [], path_attr_len,[], [])
         len_ = path_attr_len
-        #msg = cls(,addr_family,res,addr_family)
+        
         while len_ > 0:
             (flag,code) = struct.unpack_from('!BB',buf,offset)
             cls_ = cls._PATH_ATTRIBUTES.get(code,None)
@@ -260,7 +259,33 @@ class bgp4_update(object):
                     len_ -= cls_.length
                     offset += cls_.length
             else:
-                pass
+                # skip the atttribute we don't defined 
+                offset += 2
+                if (flag & 0x10) == 1:
+                    length = struct.unpack_from('!H', buf, offset)
+                    offset += 2 + length                      
+                elif (flag & 0x10) == 0:
+                    length = struct.unpack_from('!B', buf, offset)
+                    offset += 1 + length
+
+        #handle nlri,nlri is a list of the format [a_prefix,a_nlri,a_prefix,a_nlri]    
+        nlri = []
+        while len(buf) > offset:                   
+            len_nlri = struct.unpack_from('!B', buf, offset)
+            offset += 1
+            nlri.append(len_nlri)
+            a = len_nlri/8
+            b = len_nlri%8
+
+            if b != 0:
+                a += 1
+                b = 8-b
+            para_nlri = struct.unpack_from('!%is'%a, buf, offset)
+            para_nlri >>= b 
+            offset += a
+            nlri.append(para_nlri)
+
+        msg.nlri = nlri
         return msg
     
 
@@ -278,6 +303,19 @@ class bgp4_update(object):
 
             struct.pack_into('!H', hdr, 2, self.path_attr_len)
 
+        #nlri
+        if self.nlri != []:
+            for i in range(len(self.nlri)/2):
+            len_nlri = nlri[2*i]
+            a = len_nlri/8
+            b = len_nlri%8
+            if b != 0:
+                a += 1
+                self.nlri[2*i+1] <<= (8-b) 
+                hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
+            elif a == 0 and b == 0:
+                hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
+            
         return hdr
        
 @bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
@@ -436,9 +474,8 @@ class mp_reach_nlri(object):
                     offset += len_of_snap
                     snaps.append(snap)
 
-        if offset < len(buf):
-            nlri = []
-            #for i in range(len(self.nlri)):
+        nlri = []
+        while offset < len(buf):                   
             len_nlri = struct.unpack_from('!B', buf, offset)
             offset += 1
             nlri.append(len_nlri)
@@ -487,10 +524,10 @@ class mp_reach_nlri(object):
             b = len_nlri%8
             if b != 0:
                 a += 1
-                self.snaps[2*i+1] <<= (8-b) 
-                hdr += bytearray(struct.pack('!B%is'%a, self.snaps[2*i], self.snaps[2*i+1]))
+                self.nlri[2*i+1] <<= (8-b) 
+                hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
             elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B',self.snaps[2*i]))
+                hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
             self.length += a + 1
 
         if self._PACK_STR == '!BBH':
