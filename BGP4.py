@@ -21,10 +21,9 @@ class bgp4(packet_base.PacketBase):
             return cls
         return _register_bgp4_type        
 
-    def __init__(self, marker, length, type_, data=None):
-        #length default value is 0
+    def __init__(self, length = 0, type_, data = None):
         super(bgp4, self).__init__()
-        self.marker = marker
+        self.marker = 1
         self.length = length
         self.type_ = type_        
         self.data = data
@@ -32,8 +31,7 @@ class bgp4(packet_base.PacketBase):
     @classmethod
     def parser(cls, buf):
         (marker_, length, type_) = struct.unpack_from(cls._PACK_STR, buf)
-        marker = (struct.unpack_from('!4I',marker_)[0])&0x1
-        msg = cls(marker, length, type_)
+        msg = cls(length, type_)
         offset = cls._MIN_LEN
         if len(buf) > offset:
             cls_ = cls._BGP4_TYPES.get(type_, None)
@@ -45,23 +43,19 @@ class bgp4(packet_base.PacketBase):
         return msg, None
 
     def serialize(self, payload, prev):
-        marker_ = None
-        if self.marker == 1:
-            marker_ = struct.pack('!4I',*[(self.marker<<32)-1]*4)
-        elif self.marker == 0:
-            marker_ = struct.pack('!4I',*[self.marker]*4) 
+        marker_ = struct.pack('!4I', *[(1 << 32) - 1] * 4)
 
-        if marker_:   
-            hdr = bytearray(struct.pack(BGP4._PACK_STR,marker_,self.length, self.type_))            
-            if self.data is not None:
-                if self.type_ in bgp4._BGP4_TYPES:
-                    hdr += self.data.serialize()
-                else:
-                    hdr += bytearray(self.data)
+        hdr = bytearray(struct.pack(BGP4._PACK_STR, marker_, self.length,
+                                    self.type_))
+        if self.data is not None:
+            if self.type_ in bgp4._BGP4_TYPES:
+                hdr += self.data.serialize()
+            else:
+                hdr += bytearray(self.data)
 
-            if self.length == 0:
-                self.length = len(hdr)
-                struct.pack_into('!H', hdr, 16, self.length)                
+        if self.length == 0:
+            self.length = len(hdr)
+            struct.pack_into('!H', hdr, 16, self.length)                
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
