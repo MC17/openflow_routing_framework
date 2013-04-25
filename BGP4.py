@@ -4,7 +4,7 @@ from ryu.lib.packet import packet_base
 BGP4_OPEN = 1
 BGP4_UPDATE = 2
 BGP4_NOTIFICATION = 3
-#BGP4_KEEPALIVE = 4 keepalive message only contain a header  
+BGP4_KEEPALIVE = 4 #keepalive message only contain a header  
 #BGP4_ROUTE_REFRESH = 5
 
 class bgp4(packet_base.PacketBase):
@@ -21,9 +21,10 @@ class bgp4(packet_base.PacketBase):
             return cls
         return _register_bgp4_type        
 
-    def __init__(self, length = 0, type_, data = None):
+    def __init__(self, marker, length, type_, data=None):
+        #length default value is 0
         super(bgp4, self).__init__()
-        self.marker = 1
+        self.marker = marker
         self.length = length
         self.type_ = type_        
         self.data = data
@@ -31,7 +32,8 @@ class bgp4(packet_base.PacketBase):
     @classmethod
     def parser(cls, buf):
         (marker_, length, type_) = struct.unpack_from(cls._PACK_STR, buf)
-        msg = cls(length, type_)
+        marker = (struct.unpack_from('!4I',marker_)[0])&0x1
+        msg = cls(marker, length, type_)
         offset = cls._MIN_LEN
         if len(buf) > offset:
             cls_ = cls._BGP4_TYPES.get(type_, None)
@@ -40,22 +42,24 @@ class bgp4(packet_base.PacketBase):
             else:
                 msg.data = buf[offset:]
 
-        return msg, None
+        return msg
 
     def serialize(self, payload, prev):
-        marker_ = struct.pack('!4I', *[(1 << 32) - 1] * 4)
+        marker_ = None
+        if self.marker == 1:
+            marker_ = struct.pack('!4I',*[(self.marker)<<32-1]*4)       
 
-        hdr = bytearray(struct.pack(BGP4._PACK_STR, marker_, self.length,
-                                    self.type_))
-        if self.data is not None:
-            if self.type_ in bgp4._BGP4_TYPES:
-                hdr += self.data.serialize()
-            else:
-                hdr += bytearray(self.data)
+        if marker_:   
+            hdr = bytearray(struct.pack(self._PACK_STR,marker_,self.length, self.type_))            
+            if self.data is not None:
+                if self.type_ in bgp4._BGP4_TYPES:
+                    hdr += self.data.serialize()
+                else:
+                    hdr += bytearray(self.data)
 
-        if self.length == 0:
-            self.length = len(hdr)
-            struct.pack_into('!H', hdr, 16, self.length)                
+            if self.length == 0:
+                self.length = len(hdr)
+                struct.pack_into('!H', hdr, 16, self.length)                
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
@@ -125,9 +129,9 @@ class bgp4_open(object):
             for para in self.data:
                 
                 #hdr += bytearray(struct.pack('!BB', para.code, para.length))
-                cls_ = cls._CAPABILITY_ADVERTISEMENT.get(para.code, None)
+                cls_ = self._CAPABILITY_ADVERTISEMENT.get(para.code, None)
                 if cls_:
-                    hdr += cls_.serialize()              
+                    hdr += para.serialize()              
                     self.para_len += cls_._MIN_LEN
 
         self.opt_para_len = self.para_len + 2
@@ -156,7 +160,7 @@ class multi_protocol_extension(object):
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.hw_src, self.res, self.sub_addr_family))
+        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.addr_family, self.res, self.sub_addr_family))
         return hdr
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH) 
@@ -225,9 +229,7 @@ class bgp4_update(object):
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
-    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0,
-                 path_attr = [], nlri = []):
-        # wd_rout for 'withdrawn routes'
+    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0, path_attr = [], nlri = []):
         self.wd_rout_len = wd_rout_len
         self.wd_rout = wd_rout
         self.path_attr_len = path_attr_len
@@ -306,15 +308,15 @@ class bgp4_update(object):
         #nlri
         if self.nlri != []:
             for i in range(len(self.nlri)/2):
-            len_nlri = nlri[2*i]
-            a = len_nlri/8
-            b = len_nlri%8
-            if b != 0:
-                a += 1
-                self.nlri[2*i+1] <<= (8-b) 
-                hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
-            elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
+                len_nlri = nlri[2*i]
+                a = len_nlri/8
+                b = len_nlri%8
+                if b != 0:
+                    a += 1
+                    self.nlri[2*i+1] <<= (8-b) 
+                    hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
+                elif a == 0 and b == 0:
+                    hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
             
         return hdr
        
