@@ -225,7 +225,9 @@ class bgp4_update(object):
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
-    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0, path_attr = [], nlri = []):
+    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0,
+                 path_attr = [], nlri = []):
+        # wd_rout for 'withdrawn routes'
         self.wd_rout_len = wd_rout_len
         self.wd_rout = wd_rout
         self.path_attr_len = path_attr_len
@@ -233,8 +235,17 @@ class bgp4_update(object):
         self.nlri = nlri  
         
     def parser(cls, buf, offset):
-        (wd_rout_len,path_attr_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        offset += 4
+        wd_rout_len = struct.unpack_from('!H', buf, offset)
+        offset += 2
+
+        if wd_rout_len > 0:
+            # unpack from packet but we don't handle this part
+            wd_rout = struct.unpack_from('!%ds' % wd_rout_len, buf, offset)
+            offset += wd_rout_len
+
+        path_attr_len = struct.unpack_from('!H', buf, offset)
+        offset += 2
+
         msg = cls(wd_rout_len, [], path_attr_len,[], [])
         len_ = path_attr_len
         #msg = cls(,addr_family,res,addr_family)
