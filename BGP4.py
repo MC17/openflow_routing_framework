@@ -40,7 +40,8 @@ class bgp4(packet_base.PacketBase):
         if len(buf) > offset:
             cls_ = cls._BGP4_TYPES.get(type_, None)
             if cls_:
-                msg.data = cls_.parser(buf, offset)
+                #print cls_.__dict__
+                msg.data = cls_.parser( buf, offset)
             else:
                 msg.data = buf[offset:]
 
@@ -218,6 +219,7 @@ class bgp4_update(object):
 
     _ORIGIN = 1
     _AS_PATH = 2
+    _NEXT_HOP = 3
     _MULTI_EXIT_DISK = 4
     _MP_REACH_NLRI = 14
     _MP_UNREACH_NLRI = 15
@@ -238,31 +240,36 @@ class bgp4_update(object):
         self.path_attr_len = path_attr_len
         self.path_attr = path_attr
         self.nlri = nlri  
-        
+    
+    @classmethod   
     def parser(cls, buf, offset):
 
         #(wd_rout_len,path_attr_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        wd_rout_len = struct.unpack_from('!H', buf, offset)
+        (wd_rout_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
         # we don't handle wd_rote here,just skip it
         if wd_rout_len != 0:
             offset += wd_rout_len
-        path_attr_len = struct.unpack_from('!H', buf, offset)
+        (path_attr_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
 
         msg = cls(wd_rout_len, [], path_attr_len,[], [])
         len_ = path_attr_len
-        
+       
         while len_ > 0:
-            (flag,code) = struct.unpack_from('!BB',buf,offset)
+            (flag,code) = struct.unpack_from('!BB', buf,offset)
             cls_ = cls._PATH_ATTRIBUTES.get(code,None)
             if cls_:
-                msg.path_attr.append(cls_.parser(buf, offset))
+                path_attr_msg = cls_.parser(buf, offset)
+                msg.path_attr.append(path_attr_msg)
                 len_ -= cls_._MIN_LEN
+                print'path_attr_len is',len_
                 offset += cls_._MIN_LEN
-                if cls_.__dict__.has_key('length'):
-                    len_ -= cls_.length
-                    offset += cls_.length
+                
+                if path_attr_msg.__dict__.has_key('length'):
+                    len_ -= path_attr_msg.length
+                    offset += path_attr_msg.length
+                    print'path_attr_len is',len_
             else:
                 # skip the atttribute we don't defined 
                 offset += 2
@@ -270,25 +277,35 @@ class bgp4_update(object):
                     length = struct.unpack_from('!H', buf, offset)
                     offset += 2 + length                      
                 elif (flag & 0x10) == 0:
-                    length = struct.unpack_from('!B', buf, offset)
+                    (length,) = struct.unpack_from('!B', buf, offset)
                     offset += 1 + length
+            
 
         #handle nlri,nlri is a list of the format [a_prefix,a_nlri,a_prefix,a_nlri]    
         nlri = []
         while len(buf) > offset:                   
-            len_nlri = struct.unpack_from('!B', buf, offset)
+            (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             nlri.append(len_nlri)
+
             a = len_nlri/8
             b = len_nlri%8
 
-            if b != 0:
-                a += 1
-                b = 8-b
-            para_nlri = struct.unpack_from('!%is'%a, buf, offset)
-            para_nlri >>= b 
-            offset += a
-            nlri.append(para_nlri)
+            if a == 0 and b==0:
+                nlri.append('0.0.0.0')
+            else:
+                if b != 0:
+                    a += 1
+                #question for Brother Can and jiong,have a good time
+                (str_para_nlri,) = struct.unpack_from('!%is'%a, buf, offset)
+                para_nlri = 0
+                for i in xrange(len(str_para_nlri)):
+                    para_nlri <<= 8
+                    para_nlri += int(str_para_nlri[i],16)
+                para_nlri <<= (4-a)*8
+                #para_nlri
+                offset += a
+                nlri.append(convert.ipv4_to_str(para_nlri))
 
         msg.nlri = nlri
         return msg
@@ -329,15 +346,16 @@ class origin(object):
     _PACK_STR = 'BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,flag = 0x80, code = bgp4_update._ORIGIN, length = 1, value = 1):
+    def __init__(self,flag = 0x40, code = bgp4_update._ORIGIN, length = 1, value = 1):
         #value: 0--IGP 1--EGP 2--INCOMPLETE
         self.flag = flag
         self.code = code
         self.length = length
         self.value = value
 
+    @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, value) = struct.unpack_from( self._PACK_STR+'B', buf, offset)
+        (flag, code, length, value) = struct.unpack_from( cls._PACK_STR+'B', buf, offset)
         offset += cls._MIN_LEN + 1
         msg = cls( flag, code, length, value)
         return msg
@@ -358,22 +376,22 @@ class as_path(object):
         self.as_values = as_values
       
         if ((flag & 0x10) == 0x10):
-            _PACK_STR = '!BBH'
-            _MIN_LEN = struct.calcsize(_PACK_STR) 
+            self._PACK_STR = '!BBH'
+            self._MIN_LEN = struct.calcsize(self._PACK_STR) 
         else:
-            _PACK_STR = '!BBB'
-            _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
+            self._PACK_STR = '!BBB'
+            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
 
-
-    def parser(cls, buffer, offset):
+    @classmethod
+    def parser(cls, buf, offset):
         (flag,code) = struct.unpack_from('!BB', buf, offset)
 
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
 
         (flag, code, length, as_type, as_len) = struct.unpack_from(cls._PACK_STR+'BB', buf, offset)
         offset += cls._MIN_LEN + 2
@@ -381,7 +399,7 @@ class as_path(object):
         for i in range(as_len):
             as_value = struct.unpack_from('!H', buf, offset)
             offset += 2
-            as_values.append[as_value]
+            as_values.append(as_value)
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
 
@@ -394,6 +412,29 @@ class as_path(object):
             self.length += 2
         struct.pack_into('!'+self._PACK_STR[3], self.length)
         return hdr
+
+@bgp4_update.register_path_attributes_type(bgp4_update._NEXT_HOP)
+class next_hop(object):    
+    _PACK_STR = '!BBB'
+    _MIN_LEN = struct.calcsize(_PACK_STR) 
+
+    def __init__( self,flag = 0x40, code = bgp4_update._NEXT_HOP, length = 4, _next_hop = None):
+        self.flag = flag
+        self.code = code
+        self.length = length
+        self._next_hop = convert.ipv4_to_int(_next_hop)
+
+    @classmethod
+    def parser(cls, buf, offset):
+        (flag, code, length, _int_next_hop) = struct.unpack_from(cls._PACK_STR+'I', buf, offset)
+        _next_hop = convert.ipv4_to_str(_int_next_hop)
+        msg = cls(flag, code, length, _next_hop)
+        return msg
+
+    def serialize(self):
+        hdr = bytearray(struct.pack( self._PACK_STR+'I', self.flag, self.code, self.length, self._next_hop))
+        return hdr
+
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
 class multi_exit_disk(object):
@@ -408,6 +449,7 @@ class multi_exit_disk(object):
         self.length = length
         self.value = value
 
+    @classmethod
     def parser(cls, buf, offset):
         (flag, code, length, value) = struct.unpack_from( self._PACK_STR+'I', buf, offset)
         offset += cls._MIN_LEN + 4
@@ -443,6 +485,7 @@ class mp_reach_nlri(object):
             _PACK_STR = '!BBB'
             _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
 
+    @classmethod
     def parser(cls, buf, offset):
         (flag,code) = struct.unpack_from('!BB', buf, offset)
 
@@ -561,6 +604,7 @@ class mp_unreach_nlri(object):
             _PACK_STR = '!BBB'
             _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
 
+    @classmethod
     def parser(cls, buf, offset):
         
         (flag,code) = struct.unpack_from('!BB', buf, offset)
@@ -625,6 +669,7 @@ class bgp4_notification(object):
         self.err_subcode = err_subcode
         self.data = data
 
+    @classmethod
     def parser(cls, buf, offset):
         (err_code,err_subcode) = struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += self._MIN_LEN
