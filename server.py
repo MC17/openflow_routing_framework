@@ -60,7 +60,7 @@ class Connection(object):
 
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
-        self.send_q = Queue()
+        self.send_q = Queue(1)
     
     def close(self):
         print "close the connect from", self.address
@@ -127,16 +127,17 @@ class Connection(object):
         cp_ad.append(BGP4.multi_protocol_extension(1,4,1,0x00,1))
         cp_ad.append(BGP4.route_refresh(2,0))
         cp_ad.append(BGP4.support_4_octets_as_num(65,4,100))#as_num =100
-        open_replay = BGP4.bgp4_open(4,100,240,'10.109.242.53',0,2,0,cp_ad)
-        bgp4_replay = BGP4.bgp4(1,0,1,open_replay)       
+        open_reply = BGP4.bgp4_open(4,100,240,'10.109.242.53',0,2,0,cp_ad)
+        bgp4_reply = BGP4.bgp4(1,0,1,open_reply)       
         p = packet.Packet()
-        p.add_protocol(bgp4_replay)        
+        p.add_protocol(bgp4_reply)        
         p.serialize()
 
-        print bgp4_replay.marker
-        print BGP4.bgp4.parser(buffer(p.data)).__dict__
+        #print bgp4_reply.marker
+        #print BGP4.bgp4.parser(buffer(p.data)).__dict__
         #print type(p.data)
-        #self.send(p.data)
+        self.send(p.data)
+        print 'send open reply success!'
            
        
             
@@ -151,8 +152,10 @@ class Connection(object):
             self.send_q = None
 
     def send(self, buf):
-        while self.send_q:
-            self.send_q.put(buf)  
+        if self.send_q:
+            self.send_q.put(buf)
+            #print BGP4.bgp4.parser(buffer(buf)).__dict__
+            print 'calling send function successfully'  
 
     def serve(self):
         send_thr = gevent.spawn(self._send_loop)

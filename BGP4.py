@@ -1,5 +1,7 @@
 import struct
+import convert
 from ryu.lib.packet import packet_base
+
 
 BGP4_OPEN = 1
 BGP4_UPDATE = 2
@@ -46,8 +48,8 @@ class bgp4(packet_base.PacketBase):
 
     def serialize(self, payload, prev):
         marker_ = None
-        if self.marker == 1:
-            marker_ = struct.pack('!4I',*[(self.marker)<<32-1]*4)       
+        if self.marker == 1:            
+            marker_ = struct.pack('!4I',*[((self.marker)<<32)-1]*4)       
 
         if marker_:   
             hdr = bytearray(struct.pack(self._PACK_STR,marker_,self.length, self.type_))            
@@ -64,7 +66,7 @@ class bgp4(packet_base.PacketBase):
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
 class bgp4_open(object):
-    _PACK_STR = '!BHH4sB'
+    _PACK_STR = '!BHHIB'
     _MIN_LEN = struct.calcsize(_PACK_STR)   
     _CAPABILITY_ADVERTISEMENT = {}
 
@@ -88,7 +90,7 @@ class bgp4_open(object):
         self.version = version
         self.my_as = my_as
         self.hold_time = hold_time
-        self.bgp_identifier = bgp_identifier
+        self.bgp_identifier = convert.ipv4_to_int(bgp_identifier)
         self.opt_para_len = opt_para_len        
         self.type_ = type_
         self.para_len = para_len
@@ -99,6 +101,7 @@ class bgp4_open(object):
         (version, my_as, hold_time, bgp_identifier, opt_para_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN        
 
+        bgp_identifier = convert.ipv4_to_str(bgp_identifier)
         if opt_para_len >= 2:
             (type_,para_len) = struct.unpack_from('!BB',buf,offset)
             offset += 2
@@ -187,7 +190,7 @@ class route_refresh(object):
 @bgp4_open.register_capability_advertisement_type(bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM) 
 class support_4_octets_as_num(object):
 
-    _PACK_STR = '!BB'
+    _PACK_STR = '!BBI'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
     def __init__(self, code, length, as_num):
@@ -198,12 +201,12 @@ class support_4_octets_as_num(object):
         
     @classmethod
     def parser(cls, buf, offset):
-        (code, length, as_num) = struct.unpack_from(cls._PACK_STR+'I', buf, offset)
+        (code, length, as_num) = struct.unpack_from(cls._PACK_STR, buf, offset)
         msg = cls(code, length, as_num)
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack(self._PACK_STR+'I', self.code, self.length, self.as_num))
+        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.as_num))
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
