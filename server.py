@@ -68,7 +68,7 @@ class Connection(object):
 
     @_deactivate
     def _recv_loop(self):
-        buf = bytearray()
+        buf = bytearray()       
         required_len = BGP4_HEADER_SIZE
         packet_len = 0 
         msg_type = 0
@@ -81,14 +81,24 @@ class Connection(object):
                 self.is_active = False
                 break
             buf += ret           
-            
+            # a little question ?
             while len(buf) >= required_len:
                 if packet_len == 0:
+                    print len(buf)
                     (marker,length,type_) = struct.unpack('!16sHB',buffer(buf))
-                    #print 'length is ',length
                     packet_len = length
                     msg_type = type_
+                    #print 'msg_type is ',msg_type 
                     required_len = length - required_len
+                    #handle keepalive message
+                    if required_len == 0:
+                        msg = BGP4.bgp4.parser(buffer(buf[0:packet_len])) 
+                        self._handle(msg)
+                        buf = buf[packet_len:]
+                        required_len = BGP4_HEADER_SIZE 
+                        packet_len = 0
+                        msg_type = 0                    
+                        gevent.sleep(0)
                     break
                 else:
                     msg = BGP4.bgp4.parser(buffer(buf[0:packet_len])) 
@@ -100,6 +110,8 @@ class Connection(object):
                     #count += 1
                     #if count > 20:
                     gevent.sleep(0)
+                    
+
                 
                 
 
@@ -108,11 +120,13 @@ class Connection(object):
         msg_type = msg.type_
         if msg_type == BGP4.BGP4_OPEN:
             self._handle_open(msg)
+            print 'OPEN msg'
         elif msg_type == BGP4.BGP4_UPDATE:
             print 'UPDATE msg' 
-        elif msg_type == BGP4.BGP4_NOTIFICATION:
+        elif msg_type == BGP4.BGP4_NOTIFICATION:            
             print 'NOTIFICATION msg'            
         elif msg_type == BGP4.BGP4_KEEPALIVE:
+            self._handle_keepalive(msg)
             print 'KEEPALIVE msg'
         else:
             print 'else msg_type',msg_type
@@ -137,8 +151,18 @@ class Connection(object):
         #print BGP4.bgp4.parser(buffer(p.data)).__dict__
         #print type(p.data)
         self.send(p.data)
-        print 'send open reply success!'
-           
+        #print 'send open reply success!'
+    
+
+    def _handle_keepalive(self,msg):
+        bgp4_reply = BGP4.bgp4(1,0,4,None)
+        p = packet.Packet()
+        p.add_protocol(bgp4_reply)        
+        p.serialize()
+        self.send(p.data)
+
+
+
        
             
         
@@ -155,7 +179,7 @@ class Connection(object):
         if self.send_q:
             self.send_q.put(buf)
             #print BGP4.bgp4.parser(buffer(buf)).__dict__
-            print 'calling send function successfully'  
+            #print 'calling send function successfully'  
 
     def serve(self):
         send_thr = gevent.spawn(self._send_loop)
