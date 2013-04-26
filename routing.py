@@ -313,7 +313,7 @@ class Routing(app_manager.RyuApp):
             gateway = switch.ports[in_port_no].gateway
             pop_list = []
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
-            if gateway and gateway.gw_ipv6 == ipv6.dst:
+            if gateway and gateway.gw_ipv6 == ipv6_pkt.dst:
                 self._remember_mac_addr(switch, pkt, 6)
                 for i in xrange(len(switch.msg_buffer)):
                     msg, pkt, outport_no, _4or6 = switch.msg_buffer[i]
