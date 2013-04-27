@@ -273,42 +273,39 @@ class bgp4_update(object):
             else:
                 # skip the atttribute we don't defined 
                 offset += 2
-                if (flag & 0x10) == 1:
+                if (flag & 0x10) == 0x10:
                     length = struct.unpack_from('!H', buf, offset)
-                    offset += 2 + length                      
+                    offset += 2 + length
+                    len_ -= 2 + length                      
                 elif (flag & 0x10) == 0:
                     (length,) = struct.unpack_from('!B', buf, offset)
                     offset += 1 + length
-            
+                    len_ -= 1 + length
+                else:
+                    print '** here'            
 
-        #handle nlri,nlri is a list of the format [a_prefix,a_nlri,a_prefix,a_nlri]    
-        nlri = []
-        while len(buf) > offset:                   
-            (len_nlri,) = struct.unpack_from('!B', buf, offset)
+        nlri = set()    # set((prefix,ip),(prefix,ip),) eg (24,3232237568)
+        while len(buf) >offset:
+            len_nlri = struct.unpack_from('!B', buf, offset)
             offset += 1
-            nlri.append(len_nlri)
-
-            a = len_nlri/8
-            b = len_nlri%8
-
-            if a == 0 and b==0:
-                nlri.append('0.0.0.0')
-            else:
-                if b != 0:
-                    a += 1
-                #question for Brother Can and jiong,have a good time
-                (str_para_nlri,) = struct.unpack_from('!%is'%a, buf, offset)
-                para_nlri = 0
-                for i in xrange(len(str_para_nlri)):
-                    para_nlri <<= 8
-                    para_nlri += int(str_para_nlri[i],16)
-                para_nlri <<= (4-a)*8
-                #para_nlri
-                offset += a
-                nlri.append(convert.ipv4_to_str(para_nlri))
+            
+            a = len_nlri[0]/8
+            if len_nlri[0]%8 != 0:
+                a += 1   # aB
+            b = a*'B'
+            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)#e.g (192,168,8,)
+            temp_list = list(ip_tuple) # need to append 0
+            while len(temp_list) < 4:
+                temp_list.append(0)
+            ip_nlri = convert.ipNum(*temp_list)  # ip int
+            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri[0]
+            _tuple = (len_nlri[0], ip_nlri) 
+            nlri.add(_tuple)
+            offset += a
 
         msg.nlri = nlri
         return msg
+
     
 
     def serialize(self):
@@ -397,9 +394,10 @@ class as_path(object):
         offset += cls._MIN_LEN + 2
         as_values = []
         for i in range(as_len):
-            as_value = struct.unpack_from('!H', buf, offset)
+            as_value = struct.unpack_from('!I', buf, offset)
             offset += 2
-            as_values.append(as_value)
+            as_values.append(as_value[0])
+        print '** as',as_values
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
 
@@ -428,6 +426,7 @@ class next_hop(object):
     def parser(cls, buf, offset):
         (flag, code, length, _int_next_hop) = struct.unpack_from(cls._PACK_STR+'I', buf, offset)
         _next_hop = convert.ipv4_to_str(_int_next_hop)
+        print '** next_hop',_next_hop
         msg = cls(flag, code, length, _next_hop)
         return msg
 
