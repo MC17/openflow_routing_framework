@@ -136,7 +136,7 @@ class bgp4_open(object):
                 cls_ = self._CAPABILITY_ADVERTISEMENT.get(para.code, None)
                 if cls_:
                     hdr += para.serialize()              
-                    self.para_len += cls_._MIN_LEN
+                    self.para_len += para._MIN_LEN
 
         self.opt_para_len = self.para_len + 2
         struct.pack_into('!B', hdr, 9, self.opt_para_len)
@@ -199,9 +199,19 @@ class support_4_octets_as_num(object):
         self.code = code 
         self.length = length
         self.as_num = as_num
+        if self.length == 2:
+            self._PACK_STR = '!BBH'
+        else:
+            self._PACK_STR = '!BBI'
+        self._MIN_LEN = struct.calcsize(self._PACK_STR)
         
     @classmethod
     def parser(cls, buf, offset):
+        code, length = struct.unpack_from('!BB', buf, offset)
+        if length == 2:
+            cls._PACK_STR = '!BBH'
+        else:
+            cls._PACK_STR = '!BBI'
         (code, length, as_num) = struct.unpack_from(cls._PACK_STR, buf, offset)
         msg = cls(code, length, as_num)
         return msg
@@ -675,6 +685,6 @@ class bgp4_notification(object):
 
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR, self.err_code, self.err_subcode))
-        if data != None:
+        if self.data != None:
             hdr += bytearray(self.data)
         return hdr

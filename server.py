@@ -135,6 +135,7 @@ class Connection(object):
     def _handle_open(self,msg):
 
         #print type(msg),msg.__dict__,msg.data.__dict__
+
         
         #if self.send_thr != None:
         hdr = bytearray()
@@ -156,9 +157,9 @@ class Connection(object):
 
     def _handle_update(self, msg):
 
-        """
-        send update for test
-        """
+        
+        #send update for test
+
         print '---------start send update test'
         #path_attr
         origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
@@ -185,10 +186,20 @@ class Connection(object):
         print '---------send update test success'
         
         
-        
 
     def _handle_notification(self, msg):
-        pass
+        """
+        send norification test
+
+        no = BGP4.bgp4_notification(1,2,None)
+        bgp = BGP4.bgp4(1, 46, BGP4.BGP4_NOTIFICATION, no)
+        p = packet.Packet()
+        p.add_protocol(bgp)
+        p.serialize()
+        self.send(p.data)
+        """
+        no = msg.data
+        print 'error code,sub error code',no.err_code,no.err_subcode         
 
     def _handle_keepalive(self,msg):
         bgp4_reply = BGP4.bgp4(1,0,4,None)
@@ -210,8 +221,6 @@ class Connection(object):
     def send(self, buf):
         if self.send_q:
             self.send_q.put(buf)
-            #print BGP4.bgp4.parser(buffer(buf)).__dict__
-            #print 'calling send function successfully'  
 
     def serve(self):
         send_thr = gevent.spawn(self._send_loop)
@@ -221,7 +230,15 @@ class Connection(object):
         finally:
             gevent.kill(send_thr)
             gevent.joinall([send_thr])
+
+    #
+    #  Utility methods for convenience
+    #  
     
+    def send_open_msg(self):
+        pass
+          
+
    
 
 def handler(socket, address):
