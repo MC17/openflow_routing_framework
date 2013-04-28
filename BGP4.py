@@ -284,7 +284,7 @@ class bgp4_update(object):
         nlri = set()    # set((prefix,ip),(prefix,ip),) eg (24,3232237568)
         nlri_len = 0
         while len(buf) >offset:
-            len_nlri = struct.unpack_from('!B', buf, offset)
+            (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             a = len_nlri[0]/8   # prefix/8 
             if len_nlri[0]%8 != 0:
@@ -389,7 +389,7 @@ class as_path(object):
         offset += cls._MIN_LEN + 2
         as_values = []
         for i in range(as_len):
-            as_value = struct.unpack_from('!I', buf, offset)
+            (as_value,) = struct.unpack_from('!I', buf, offset)
             offset += 2
             as_values.append(as_value[0])
         print '** as',as_values
@@ -518,7 +518,7 @@ class mp_reach_nlri(object):
 
         nlri = []
         while offset < len(buf):                   
-            len_nlri = struct.unpack_from('!B', buf, offset)
+            (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             nlri.append(len_nlri)
             a = len_nlri/8
@@ -615,7 +615,7 @@ class mp_unreach_nlri(object):
         len_ = length
         len_ -= 2
         if len_ > 0:
-            len_wd_route = struct.unpack_from('!B', buf, offset)
+            (len_wd_route,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             msg.wd_routes.append(len_wd_route)
             a = len_wd_route/8
