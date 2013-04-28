@@ -11,6 +11,7 @@ import greenlet
 import traceback
 from ryu.lib.packet import packet, ethernet
 import BGP4
+import convert
 
 
 BGP_TCP_PORT = 179  # 179
@@ -84,7 +85,6 @@ class Connection(object):
             # a little question ?
             while len(buf) >= required_len:
                 if packet_len == 0:
-                    print len(buf)
                     (marker,length,type_) = struct.unpack('!16sHB',buffer(buf))
                     packet_len = length
                     msg_type = type_
@@ -116,20 +116,21 @@ class Connection(object):
                 
 
     def _handle(self, msg):
-        print 'call handle'
         msg_type = msg.type_
         if msg_type == BGP4.BGP4_OPEN:
             self._handle_open(msg)
-            print 'OPEN msg'
+            print 'receive OPEN msg'
         elif msg_type == BGP4.BGP4_UPDATE:
-            print 'UPDATE msg' 
+            print 'receive UPDATE msg'
+            self._handle_update(msg) 
         elif msg_type == BGP4.BGP4_NOTIFICATION:            
-            print 'NOTIFICATION msg'            
+            print 'receive NOTIFICATION msg'
+            self._handle_notification(msg)            
         elif msg_type == BGP4.BGP4_KEEPALIVE:
             self._handle_keepalive(msg)
-            print 'KEEPALIVE msg'
+            print 'receive KEEPALIVE msg'
         else:
-            print 'else msg_type',msg_type
+            print 'receive else msg_type',msg_type
 
     def _handle_open(self,msg):
 
@@ -152,7 +153,42 @@ class Connection(object):
         #print type(p.data)
         self.send(p.data)
         #print 'send open reply success!'
-    
+
+    def _handle_update(self, msg):
+
+        """
+        send update for test
+        """
+        print '---------start send update test'
+        #path_attr
+        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
+        as_value = [100]
+        as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
+        # as_path length will calculate auto in serialize  4B/per as
+        next_hop_ip = '10.109.242.57'
+        next_hop_msg = BGP4.next_hop(0x40, BGP4.bgp4_update._NEXT_HOP, 4, next_hop_ip)
+        path_attr = [origin_msg, as_path_msg, next_hop_msg]
+
+        # nlri 
+        nlri = set()
+        local_ip = (24,convert.ipv4_to_int('192.168.48.0')) # (prefix,ip)
+        nlri.add(local_ip)
+
+        update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
+        # path_attr_len will calculate automatic in serialize 
+        bgp4_reply = BGP4.bgp4(1, 46,BGP4.BGP4_UPDATE, update_reply)
+        p = packet.Packet()
+        p.add_protocol(bgp4_reply)
+        p.serialize()
+        self.send(p.data)
+
+        print '---------send update test success'
+        
+        
+        
+
+    def _handle_notification(self, msg):
+        pass
 
     def _handle_keepalive(self,msg):
         bgp4_reply = BGP4.bgp4(1,0,4,None)
@@ -161,10 +197,6 @@ class Connection(object):
         p.serialize()
         self.send(p.data)
 
-
-
-       
-            
         
     @_deactivate
     def _send_loop(self):

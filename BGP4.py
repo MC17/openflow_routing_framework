@@ -60,9 +60,9 @@ class bgp4(packet_base.PacketBase):
                 else:
                     hdr += bytearray(self.data)
 
-            if self.length == 0:
-                self.length = len(hdr)
-                struct.pack_into('!H', hdr, 16, self.length)                
+            if self.length != len(hdr):
+                self.length = len(hdr) 
+                struct.pack_into('!H', hdr, 16, self.length)
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
@@ -234,13 +234,14 @@ class bgp4_update(object):
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
-    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0, path_attr = [], nlri = []):
+    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0, path_attr = [], nlri = set(),total_len = 0):
         self.wd_rout_len = wd_rout_len
         self.wd_rout = wd_rout
         self.path_attr_len = path_attr_len
         self.path_attr = path_attr
-        self.nlri = nlri  
-    
+        self.nlri = nlri
+        self.total_len = total_len  # convenient to add nlri
+        # nlri_len = total_len - 23 - path_attr_len - wd_rout_len
     @classmethod   
     def parser(cls, buf, offset):
 
@@ -252,7 +253,6 @@ class bgp4_update(object):
             offset += wd_rout_len
         (path_attr_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-
         msg = cls(wd_rout_len, [], path_attr_len,[], [])
         len_ = path_attr_len
        
@@ -263,13 +263,11 @@ class bgp4_update(object):
                 path_attr_msg = cls_.parser(buf, offset)
                 msg.path_attr.append(path_attr_msg)
                 len_ -= cls_._MIN_LEN
-                print'path_attr_len is',len_
                 offset += cls_._MIN_LEN
                 
                 if path_attr_msg.__dict__.has_key('length'):
                     len_ -= path_attr_msg.length
                     offset += path_attr_msg.length
-                    print'path_attr_len is',len_
             else:
                 # skip the atttribute we don't defined 
                 offset += 2
@@ -283,13 +281,12 @@ class bgp4_update(object):
                     len_ -= 1 + length
                 else:
                     print '** here'            
-
         nlri = set()    # set((prefix,ip),(prefix,ip),) eg (24,3232237568)
+        nlri_len = 0
         while len(buf) >offset:
             len_nlri = struct.unpack_from('!B', buf, offset)
             offset += 1
-            
-            a = len_nlri[0]/8
+            a = len_nlri[0]/8   # prefix/8 
             if len_nlri[0]%8 != 0:
                 a += 1   # aB
             b = a*'B'
@@ -302,8 +299,10 @@ class bgp4_update(object):
             _tuple = (len_nlri[0], ip_nlri) 
             nlri.add(_tuple)
             offset += a
-
+            nlri_len += 1+a
+        update_total_len = 23 + path_attr_len + wd_rout_len + nlri_len
         msg.nlri = nlri
+        msg.total_len = update_total_len
         return msg
 
     
@@ -311,30 +310,26 @@ class bgp4_update(object):
     def serialize(self):
         #serialise wd_route_len and path_attr_len first
         hdr = bytearray(struct.pack( self._PACK_STR, self.wd_rout_len, self.path_attr_len))
-        if path_attr != []:
-            for attr in path_attr:
-                cls = self._PATH_ATTRIBUTES.get(attr.type_,None)
-                if cls: 
-                    hdr += cls.serialize()
-                    self.path_attr_len += cls._MIN_LEN
-                    if cls.__dict__.has_key('length'):
-                        self.path_attr_len += cls.length
-
+        if self.path_attr != []:
+            for attr in self.path_attr:
+                cls = self._PATH_ATTRIBUTES.get(attr.code,None)
+                if cls:
+                    hdr += attr.serialize()
+                    self.path_attr_len += attr._MIN_LEN
+                    if attr.__dict__.has_key('length'):
+                        self.path_attr_len += attr.length
             struct.pack_into('!H', hdr, 2, self.path_attr_len)
+        print '## serialize path_attr success'
 
         #nlri
-        if self.nlri != []:
-            for i in range(len(self.nlri)/2):
-                len_nlri = nlri[2*i]
-                a = len_nlri/8
-                b = len_nlri%8
-                if b != 0:
-                    a += 1
-                    self.nlri[2*i+1] <<= (8-b) 
-                    hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
-                elif a == 0 and b == 0:
-                    hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
-            
+        nlri_len = 0
+        if len(self.nlri) != 0:
+            for prefix,ip in self.nlri:
+                ip_list = convert.ipv4_to_list(ip,prefix)
+                b = len(ip_list)*'B'
+                hdr += bytearray(struct.pack('!B%s'%b, prefix, *ip_list))
+                nlri_len += 1 + len(ip_list)
+        print '## serialize nlri success'
         return hdr
        
 @bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
@@ -406,9 +401,9 @@ class as_path(object):
         hdr = bytearray(struct.pack( self._PACK_STR+'BB', self.flag, self.code, self.length, self.as_type, self.as_len))
         self.length = 2
         for i in range(self.as_len):
-            hdr += bytearray(struct.pack('!H',self.as_values[i]))
-            self.length += 2
-        struct.pack_into('!'+self._PACK_STR[3], self.length)
+            hdr += bytearray(struct.pack('!I',self.as_values[i]))
+            self.length += 4
+        struct.pack_into('!'+self._PACK_STR[3], hdr, 2, self.length)
         return hdr
 
 @bgp4_update.register_path_attributes_type(bgp4_update._NEXT_HOP)
@@ -671,7 +666,7 @@ class bgp4_notification(object):
     @classmethod
     def parser(cls, buf, offset):
         (err_code,err_subcode) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        offset += self._MIN_LEN
+        offset += cls._MIN_LEN
         msg = cls( err_code, err_subcode)
         if len(buf) > offset:
             msg.data = buf[offset:]

@@ -46,6 +46,14 @@ def ipv4_to_int(ip):
     args = [int(arg) for arg in ip.split('.')]
     return ipNum(*args)
 
+def ipv4_to_list(ip,prefix):
+    a = prefix/8
+    if 0 != prefix%8:
+        a += 1
+    ip_list = []
+    for x in range(a,0,-1):
+        ip_list.append((ip >> x*8) & 0xff)
+    return ip_list
 
 # ip eg 62258 (int or long)
 def ipv4_to_str(ip):
@@ -210,6 +218,7 @@ def ipv6_in_network(ipv6, network, ipv6_prefix):
 if __name__ == '__main__':
     a = 3232236035
     print ipv4_to_str(a)
+    print ipv4_to_list(a,24)
     print bin_to_ipv6(ipv6_to_bin('3f:10::1:2'))
     print bin_to_ipv6(ipv6_to_bin('2013:da8:215:8f2:aa20:66ff:fe4c:9c3c'))
     ipv4 = ipv4_to_int('192.168.1.1')
