@@ -391,7 +391,7 @@ class as_path(object):
         for i in range(as_len):
             (as_value,) = struct.unpack_from('!I', buf, offset)
             offset += 2
-            as_values.append(as_value[0])
+            as_values.append(as_value)
         print '** as',as_values
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
