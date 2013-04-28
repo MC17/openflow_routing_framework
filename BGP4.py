@@ -282,7 +282,7 @@ class bgp4_update(object):
                 # skip the atttribute we don't defined 
                 offset += 2
                 if (flag & 0x10) == 0x10:
-                    length = struct.unpack_from('!H', buf, offset)
+                    (length,) = struct.unpack_from('!H', buf, offset)
                     offset += 2 + length
                     len_ -= 2 + length                      
                 elif (flag & 0x10) == 0:
@@ -294,10 +294,11 @@ class bgp4_update(object):
         nlri = set()    # set((prefix,ip),(prefix,ip),) eg (24,3232237568)
         nlri_len = 0
         while len(buf) >offset:
-            len_nlri = struct.unpack_from('!B', buf, offset)
+            (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
-            a = len_nlri[0]/8   # prefix/8 
-            if len_nlri[0]%8 != 0:
+            
+            a = len_nlri / 8
+            if len_nlri % 8 != 0:
                 a += 1   # aB
             b = a*'B'
             ip_tuple = struct.unpack_from('!%s'%b, buf, offset)#e.g (192,168,8,)
@@ -305,8 +306,8 @@ class bgp4_update(object):
             while len(temp_list) < 4:
                 temp_list.append(0)
             ip_nlri = convert.ipNum(*temp_list)  # ip int
-            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri[0]
-            _tuple = (len_nlri[0], ip_nlri) 
+            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri
+            _tuple = (len_nlri, ip_nlri) 
             nlri.add(_tuple)
             offset += a
             nlri_len += 1+a
@@ -399,9 +400,9 @@ class as_path(object):
         offset += cls._MIN_LEN + 2
         as_values = []
         for i in range(as_len):
-            as_value = struct.unpack_from('!I', buf, offset)
+            (as_value,) = struct.unpack_from('!I', buf, offset)
             offset += 2
-            as_values.append(as_value[0])
+            as_values.append(as_value)
         print '** as',as_values
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
@@ -528,7 +529,7 @@ class mp_reach_nlri(object):
 
         nlri = []
         while offset < len(buf):                   
-            len_nlri = struct.unpack_from('!B', buf, offset)
+            (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             nlri.append(len_nlri)
             a = len_nlri/8
@@ -589,6 +590,13 @@ class mp_reach_nlri(object):
 
         return hdr
 
+
+class NLRI(object):
+    def __init__(self, length, prefix):
+        self.length = length
+        self.prefix = prefix
+
+
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
 
@@ -614,10 +622,10 @@ class mp_unreach_nlri(object):
         (flag,code) = struct.unpack_from('!BB', buf, offset)
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR) 
 
         (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR+'BB', buf, offset)
         offset += cls._MIN_LEN
@@ -625,7 +633,7 @@ class mp_unreach_nlri(object):
         len_ = length
         len_ -= 2
         if len_ > 0:
-            len_wd_route = struct.unpack_from('!B', buf, offset)
+            (len_wd_route,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             msg.wd_routes.append(len_wd_route)
             a = len_wd_route/8
@@ -633,9 +641,9 @@ class mp_unreach_nlri(object):
             if b != 0:
                 a += 1              
             wd_route = struct.unpack_from('!%is'%a, buf, offset)
-            wd_route >>= (8-b)
             offset += a
-            msg.wd_routes.append(wd_route)
+            withdraw_nlri = NLRI(len_wd_route, wd_route)
+            msg.wd_routes.append(withdraw_nlri)
         return msg  
 
     def serialize(self):

@@ -154,6 +154,12 @@ class Connection(object):
         #print type(p.data)
         self.send(p.data)
         #print 'send open reply success!'
+        keepalive = BGP4.bgp4(1,0,4,None)
+        p = packet.Packet()
+        p.add_protocol(keepalive)
+        p.serialize()
+        self.send(p.data)
+    
 
     def _handle_update(self, msg):
 
