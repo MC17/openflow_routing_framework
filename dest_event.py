@@ -15,6 +15,7 @@ class EventDestinationRequest(event.EventRequestBase):
 
 class EventDestinationReply(event.EventReplyBase):
     def __init__(self, dpid = None, dest = None):
-        # 'dest' here is the event consumer, required by Ryu
+        # 'dest' here is the event consumer, required by Ryu,
+        # no need to set this parameter when init
         super(EventDestinationReply, self).__init__(dest)
         self.dpid = dpid
