@@ -272,7 +272,7 @@ class bgp4_update(object):
                 # skip the atttribute we don't defined 
                 offset += 2
                 if (flag & 0x10) == 0x10:
-                    length = struct.unpack_from('!H', buf, offset)
+                    (length,) = struct.unpack_from('!H', buf, offset)
                     offset += 2 + length
                     len_ -= 2 + length                      
                 elif (flag & 0x10) == 0:
@@ -604,10 +604,10 @@ class mp_unreach_nlri(object):
         (flag,code) = struct.unpack_from('!BB', buf, offset)
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR) 
 
         (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR+'BB', buf, offset)
         offset += cls._MIN_LEN
