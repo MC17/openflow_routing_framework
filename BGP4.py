@@ -580,6 +580,13 @@ class mp_reach_nlri(object):
 
         return hdr
 
+
+class NLRI(object):
+    def __init__(self, length, prefix):
+        self.length = length
+        self.prefix = prefix
+
+
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
 
@@ -624,9 +631,9 @@ class mp_unreach_nlri(object):
             if b != 0:
                 a += 1              
             wd_route = struct.unpack_from('!%is'%a, buf, offset)
-            wd_route >>= (8-b)
             offset += a
-            msg.wd_routes.append(wd_route)
+            withdraw_nlri = NLRI(len_wd_route, wd_route)
+            msg.wd_routes.append(withdraw_nlri)
         return msg  
 
     def serialize(self):
