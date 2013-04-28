@@ -286,8 +286,9 @@ class bgp4_update(object):
         while len(buf) >offset:
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
-            a = len_nlri[0]/8   # prefix/8 
-            if len_nlri[0]%8 != 0:
+            
+            a = len_nlri / 8
+            if len_nlri % 8 != 0:
                 a += 1   # aB
             b = a*'B'
             ip_tuple = struct.unpack_from('!%s'%b, buf, offset)#e.g (192,168,8,)
@@ -295,8 +296,8 @@ class bgp4_update(object):
             while len(temp_list) < 4:
                 temp_list.append(0)
             ip_nlri = convert.ipNum(*temp_list)  # ip int
-            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri[0]
-            _tuple = (len_nlri[0], ip_nlri) 
+            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri
+            _tuple = (len_nlri, ip_nlri) 
             nlri.add(_tuple)
             offset += a
             nlri_len += 1+a
