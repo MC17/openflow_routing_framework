@@ -1,17 +1,16 @@
 import gevent
+
 import time
 
-
 from ryu.base import app_manager
-from ryu.controller.handler import set_ev_handler, set_ev_cls
-from ryu.controller.handler import (HANDSHAKE_DISPATCHER, MAIN_DISPATCHER,
-                                    CONFIG_DISPATCHER, DEAD_DISPATCHER)
+from ryu.controller.handler import set_ev_cls
+from ryu.controller.handler import ( MAIN_DISPATCHER,
+                                    CONFIG_DISPATCHER )
 from ryu.controller import ofp_event
 from ryu import topology
 from ryu.ofproto import ofproto_v1_0, nx_match
-from ryu.ofproto import ether, inet
-from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6,
-                            tcp, udp)
+from ryu.ofproto import ether
+from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6 )
 from ryu.lib import mac
 
 from switch import Port, Switch
@@ -19,6 +18,7 @@ from util import read_cfg
 import algorithm
 import convert
 import dest_event
+
 
 class Routing(app_manager.RyuApp):
     ARP_TIMEOUT = 600    # in seconds
@@ -28,7 +28,7 @@ class Routing(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(Routing, self).__init__(*args, **kwargs)
-        
+
         self.dpid_to_switch = {}    # dpid_to_switch[dpid] = Switch
                                     # maintains all the switches
 
@@ -145,7 +145,7 @@ class Routing(app_manager.RyuApp):
             pass
 
 
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, [MAIN_DISPATCHER, 
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, [MAIN_DISPATCHER,
                                                 CONFIG_DISPATCHER])
     # we must handle this event because ryu's topology discovery
     # only shows ports between switches
@@ -224,7 +224,7 @@ class Routing(app_manager.RyuApp):
         in_port_no = msg.in_port
         req_dst_ip = arp_pkt.dst_ip
         req_src_ip = arp_pkt.src_ip
-        
+
         port = switch.ports[in_port_no]
         if port.gateway and req_dst_ip != port.gateway.gw_ip:
             return
@@ -235,16 +235,16 @@ class Routing(app_manager.RyuApp):
 
         e = ethernet.ethernet(dst = ether_layer.src, src = reply_src_mac,
                                 ethertype = ether.ETH_TYPE_ARP)
-        a = arp.arp(hwtype = arp.ARP_HW_TYPE_ETHERNET, 
+        a = arp.arp(hwtype = arp.ARP_HW_TYPE_ETHERNET,
                     proto = ether.ETH_TYPE_IP,
-                    hlen = 6, plen = 4, opcode = arp.ARP_REPLY, 
+                    hlen = 6, plen = 4, opcode = arp.ARP_REPLY,
                     src_mac = reply_src_mac, src_ip = req_dst_ip,
                     dst_mac = arp_pkt.src_mac, dst_ip = req_src_ip)
         p = packet.Packet()
         p.add_protocol(e)
         p.add_protocol(a)
-        p.serialize()             
-                        
+        p.serialize()
+
         datapath.send_packet_out(in_port = ofproto_v1_0.OFPP_NONE,
                 actions = [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data = p.data)
@@ -267,7 +267,7 @@ class Routing(app_manager.RyuApp):
         ipv4_layer = self.find_packet(pkt, 'ipv4')
         ip_src = ipv4_layer.src
         ip_dst = ipv4_layer.dst
-        
+
         need_reply = False
         for _k, p in switch.ports.iteritems():
             if p.gateway and p.gateway.gw_ip == ip_dst:
@@ -275,15 +275,15 @@ class Routing(app_manager.RyuApp):
                 break
         if not need_reply:
             return False
-        
+
         echo_id = icmp_pkt.data.id
         echo_seq = icmp_pkt.data.seq
         echo_data = bytearray(icmp_pkt.data.data)
 
         icmp_data = icmp.echo(id_=echo_id,seq=echo_seq,data=echo_data)
-        
+
         #send a echo reply packet
-        ether_layer = self.find_packet(pkt, 'ethernet') 
+        ether_layer = self.find_packet(pkt, 'ethernet')
         ether_dst = ether_layer.src
         ether_src = switch.ports[in_port_no].hw_addr
         e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IP)
@@ -345,7 +345,7 @@ class Routing(app_manager.RyuApp):
                     type_=icmpv6.nd_neighbor.ND_OPTION_TLA,length=1,
                     data=ic6_data_data)
             ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT,code=0,
-                    csum=0,data=ic6_data)  
+                    csum=0,data=ic6_data)
             #payload_length
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
             i6 = ipv6.ipv6(version= 6,traffic_class=0,flow_label=0,
@@ -365,7 +365,7 @@ class Routing(app_manager.RyuApp):
             return True
         elif icmpv6_pkt.type_ == icmpv6.ICMPV6_ECHO_REQUEST:
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
-            
+
             need_reply = False
             for _k, p in switch.ports.iteritems():
                 if p.gateway and p.gateway.gw_ipv6 == ipv6_pkt.dst:
@@ -373,7 +373,7 @@ class Routing(app_manager.RyuApp):
                     break
             if not need_reply:
                 return False
-            
+
             ether_layer = self.find_packet(pkt, 'ethernet')
             ether_dst = ether_layer.src
             ether_src = switch.ports[in_port_no].hw_addr
@@ -413,12 +413,12 @@ class Routing(app_manager.RyuApp):
                 ip_layer.src = ip_layer.src_ip
                 print 'ARP from ARP'
 
-            print 'ARP entry:', convert.haddr_to_str(ether_layer.src), 
+            print 'ARP entry:', convert.haddr_to_str(ether_layer.src),
             print convert.ipv4_to_str(ip_layer.src)
         else:
             ip_layer = self.find_packet(packet, 'ipv6')
         switch.ip_to_mac[ip_layer.src] = (ether_layer.src, time_now)
-        
+
 
     def deploy_flow_entry(self, msg, pkt, switch_list, _4or6):
         '''
@@ -446,11 +446,11 @@ class Routing(app_manager.RyuApp):
                 wildcards = ofproto_v1_0.OFPFW_ALL
                 wildcards &= ~ofproto_v1_0.OFPFW_DL_TYPE
                 wildcards &= ~(0x3f << ofproto_v1_0.OFPFW_NW_DST_SHIFT)
-                
+
                 match = dp.ofproto_parser.OFPMatch(
                         # because of wildcards, parameters other than dl_type
                         # and nw_dst could be any value
-                        wildcards = wildcards, in_port = 0, 
+                        wildcards = wildcards, in_port = 0,
                         dl_src = 0, dl_dst = 0, dl_vlan = 0, dl_vlan_pcp = 0,
                         dl_type = ether.ETH_TYPE_IP, nw_tos = 0, nw_proto = 0,
                         nw_src = 0, nw_dst = ip_dst, tp_src = 0,
@@ -477,7 +477,7 @@ class Routing(app_manager.RyuApp):
                     out_port = outport_no, actions = actions)
             else:
                 mod = dp.ofproto_parser.NXTFlowMod(
-                        datapath = this_switch.dp, cookie = 0, 
+                        datapath = this_switch.dp, cookie = 0,
                         command = dp.ofproto.OFPFC_MODIFY,
                         idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
                         hard_timeout = Routing.FLOW_HARD_TIMEOUT,
@@ -505,11 +505,11 @@ class Routing(app_manager.RyuApp):
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
                         mac_dst))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
-                
+
         out = dp.ofproto_parser.OFPPacketOut(
             datapath = dp, buffer_id = msg.buffer_id,
             in_port = msg.in_port, actions = actions)
-        
+
         switch.dp.send_msg(out)
 
 
@@ -614,7 +614,7 @@ class Routing(app_manager.RyuApp):
             # don't know MAC address yet, send ARP/ICMP message
             # and temporarily store the packets
             if _4or6 == 4:
-                self._send_arp_request(msg.datapath, outport_no, 
+                self._send_arp_request(msg.datapath, outport_no,
                                         ip_layer.dst)
             else:
                 self._send_icmp_NS(msg.datapath, outport_no,
@@ -631,7 +631,7 @@ class Routing(app_manager.RyuApp):
             match = dp.ofproto_parser.OFPMatch(
                     # because of wildcards, parameters other than dl_type
                     # and nw_dst could be any value
-                    wildcards = wildcards, in_port = 0, 
+                    wildcards = wildcards, in_port = 0,
                     dl_src = 0, dl_dst = 0, dl_vlan = 0, dl_vlan_pcp = 0,
                     dl_type = ether.ETH_TYPE_IP, nw_tos = 0, nw_proto = 0,
                     nw_src = 0, nw_dst = ip_layer.dst, tp_src = 0,
@@ -647,7 +647,7 @@ class Routing(app_manager.RyuApp):
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
                         mac_addr))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
-        
+
         if _4or6 == 4:
             mod = dp.ofproto_parser.OFPFlowMod(
                     datapath = dp, match = match, cookie = 0,
@@ -657,13 +657,13 @@ class Routing(app_manager.RyuApp):
                     out_port = outport_no, actions = actions)
         else:
             mod = dp.ofproto_parser.NXTFlowMod(
-                    datapath = dp, cookie = 0, 
+                    datapath = dp, cookie = 0,
                     command = dp.ofproto.OFPFC_MODIFY,
                     idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
                     hard_timeout = Routing.FLOW_HARD_TIMEOUT,
                     out_port = outport_no, rule = rule,
                     actions = actions)
- 
+
         out = dp.ofproto_parser.OFPPacketOut(
             datapath = dp, buffer_id = msg.buffer_id,
             in_port = msg.in_port, actions = actions)
@@ -671,14 +671,14 @@ class Routing(app_manager.RyuApp):
         dp.send_msg(mod)
         dp.send_msg(out)
         return True
-            
+
 
     def find_switch_of_network(self, dst_addr, _4or6):
         for dpid, switch in self.dpid_to_switch.iteritems():
             for port_no, port in switch.ports.iteritems():
                 if _4or6 == 4:
                     if port.gateway and convert.ipv4_in_network(dst_addr,
-                                    port.gateway.gw_ip, 
+                                    port.gateway.gw_ip,
                                     port.gateway.prefixlen):
                         if dst_addr == port.gateway.gw_ip:
                             return self.dpid_to_switch[dpid], \
@@ -722,7 +722,7 @@ class Routing(app_manager.RyuApp):
                     return
             except:
                 pass
-        
+
         dst_switch, dst_port_no = self.find_switch_of_network(
                                         protocol_pkt.dst, _4or6)
 
@@ -766,7 +766,7 @@ class Routing(app_manager.RyuApp):
                 buffer_id = msg.buffer_id, in_port = msg.in_port,
                 actions = [])
         dp.send_msg(out)
-        
+
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, event):

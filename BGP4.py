@@ -2,6 +2,7 @@ import struct
 import convert
 from ryu.lib.packet import packet_base
 
+BGP_TCP_PORT = 179
 
 BGP4_OPEN = 1
 BGP4_UPDATE = 2
@@ -30,28 +31,30 @@ class bgp4(packet_base.PacketBase):
 
     _PACK_STR = '!16sHB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
+    BGP4_HEADER_SIZE = _MIN_LEN
     _BGP4_TYPES = {}
-    
+
     @staticmethod
-    def register_bgp4_type(*args):        
+    def register_bgp4_type(*args):
         def _register_bgp4_type(cls):
             for type_ in args:
                 bgp4._BGP4_TYPES[type_] = cls
             return cls
-        return _register_bgp4_type        
+
+        return _register_bgp4_type
 
     def __init__(self, marker, length, type_, data=None):
         #length default value is 0
         super(bgp4, self).__init__()
         self.marker = marker
         self.length = length
-        self.type_ = type_        
+        self.type_ = type_
         self.data = data
 
     @classmethod
     def parser(cls, buf):
         (marker_, length, type_) = struct.unpack_from(cls._PACK_STR, buf)
-        marker = (struct.unpack_from('!4I',marker_)[0])&0x1
+        marker = (struct.unpack_from('!4I', marker_)[0]) & 0x1
         msg = cls(marker, length, type_)
         offset = cls._MIN_LEN
         if len(buf) > offset:
@@ -65,11 +68,11 @@ class bgp4(packet_base.PacketBase):
 
     def serialize(self, payload, prev):
         marker_ = None
-        if self.marker == 1:            
-            marker_ = struct.pack('!4I',*[((self.marker)<<32)-1]*4)       
+        if self.marker == 1:
+            marker_ = struct.pack('!4I', *[((self.marker) << 32) - 1] * 4)
 
-        if marker_:   
-            hdr = bytearray(struct.pack(self._PACK_STR,marker_,self.length, self.type_))            
+        if marker_:
+            hdr = bytearray(struct.pack(self._PACK_STR, marker_, self.length, self.type_))
             if self.data is not None:
                 if self.type_ in bgp4._BGP4_TYPES:
                     hdr += self.data.serialize()
@@ -77,9 +80,10 @@ class bgp4(packet_base.PacketBase):
                     hdr += bytearray(self.data)
 
             if self.length != len(hdr):
-                self.length = len(hdr) 
+                self.length = len(hdr)
                 struct.pack_into('!H', hdr, 16, self.length)
         return hdr
+
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
 class bgp4_open(object):
@@ -106,7 +110,7 @@ class bgp4_open(object):
     """
 
     _PACK_STR = '!BHHIB'
-    _MIN_LEN = struct.calcsize(_PACK_STR)   
+    _MIN_LEN = struct.calcsize(_PACK_STR)
     _CAPABILITY_ADVERTISEMENT = {}
 
 
@@ -122,15 +126,17 @@ class bgp4_open(object):
             for type_ in args:
                 bgp4_open._CAPABILITY_ADVERTISEMENT[type_] = cls
             return cls
+
         return _register_capability_advertisement_type
-    
-     #using capabilities adverstisement in it's optional parameters' field
-    def __init__(self, version, my_as, hold_time, bgp_identifier,opt_para_len = 0,type_ = 2, para_len = 0, data = []):
+
+        #using capabilities adverstisement in it's optional parameters' field
+
+    def __init__(self, version, my_as, hold_time, bgp_identifier, opt_para_len=0, type_=2, para_len=0, data=[]):
         self.version = version
         self.my_as = my_as
         self.hold_time = hold_time
         self.bgp_identifier = convert.ipv4_to_int(bgp_identifier)
-        self.opt_para_len = opt_para_len        
+        self.opt_para_len = opt_para_len
         self.type_ = type_
         self.para_len = para_len
         self.data = data
@@ -138,42 +144,42 @@ class bgp4_open(object):
     @classmethod
     def parser(cls, buf, offset):
         (version, my_as, hold_time, bgp_identifier, opt_para_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
-        offset += cls._MIN_LEN        
+        offset += cls._MIN_LEN
 
         bgp_identifier = convert.ipv4_to_str(bgp_identifier)
         if opt_para_len >= 2:
-            (type_,para_len) = struct.unpack_from('!BB',buf,offset)
+            (type_, para_len) = struct.unpack_from('!BB', buf, offset)
             offset += 2
-            msg = cls(version, my_as, hold_time, bgp_identifier, opt_para_len, type_,para_len)
+            msg = cls(version, my_as, hold_time, bgp_identifier, opt_para_len, type_, para_len)
         else:
             msg = cls(version, my_as, hold_time, bgp_identifier, opt_para_len)
-       
+
         msg.data = []
         if len(buf) > offset:
             #capability advertisement  2
-            length = msg.opt_para_len - 2      
+            length = msg.opt_para_len - 2
             while length >= 2:
-                    code,len_ = struct.unpack_from('!BB', buf, offset)
-                    cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)            
-                    if cls_:
-                        msg.data.append(cls_.parser(buf, offset))
-                    length -= (len_ + 2)              
+                code, len_ = struct.unpack_from('!BB', buf, offset)
+                cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
+                if cls_:
+                    msg.data.append(cls_.parser(buf, offset))
+                length -= (len_ + 2)
 
         return msg
-    
-    def serialize(self):
-        self.opt_para_len = 0 
-        hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, self.my_as, self.hold_time, 
-            self.bgp_identifier, self.opt_para_len)) 
 
-        if self.data != []:            
-            hdr +=  bytearray(struct.pack('!BB', self.type_, self.para_len)) 
+    def serialize(self):
+        self.opt_para_len = 0
+        hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, self.my_as, self.hold_time,
+                                    self.bgp_identifier, self.opt_para_len))
+
+        if self.data != []:
+            hdr += bytearray(struct.pack('!BB', self.type_, self.para_len))
             for para in self.data:
-                
+
                 #hdr += bytearray(struct.pack('!BB', para.code, para.length))
                 cls_ = self._CAPABILITY_ADVERTISEMENT.get(para.code, None)
                 if cls_:
-                    hdr += para.serialize()              
+                    hdr += para.serialize()
                     self.para_len += para._MIN_LEN
 
         self.opt_para_len = self.para_len + 2
@@ -181,19 +187,19 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
+
 @bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCOL_EXTENSION)
 class multi_protocol_extension(object):
-
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self, code, length,addr_family, res, sub_addr_family):
+    def __init__(self, code, length, addr_family, res, sub_addr_family):
         #res = 0x00 code = bgp4_open._CAPABILITY_ADVERTISEMENT_MPE length = self._MIN_LEN
         self.code = code
-        self.length =length
+        self.length = length
         self.addr_family = addr_family
         self.res = res
-        self.sub_addr_family = sub_addr_family 
+        self.sub_addr_family = sub_addr_family
 
     @classmethod
     def parser(cls, buf, offset):
@@ -202,12 +208,13 @@ class multi_protocol_extension(object):
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.addr_family, self.res, self.sub_addr_family))
+        hdr = bytearray(
+            struct.pack(self._PACK_STR, self.code, self.length, self.addr_family, self.res, self.sub_addr_family))
         return hdr
 
-@bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH) 
-class route_refresh(object):
 
+@bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH)
+class route_refresh(object):
     _PACK_STR = '!BB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
@@ -215,7 +222,7 @@ class route_refresh(object):
         #code = bgp4_open._CAPABILITY_ADVERTISEMENT_ROUTE_REFRESH length = 0
         self.code = code
         self.length = length
-        
+
     @classmethod
     def parser(cls, buf, offset):
         (code, length) = struct.unpack_from(cls._PACK_STR, buf, offset)
@@ -226,15 +233,15 @@ class route_refresh(object):
         hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length))
         return hdr
 
-@bgp4_open.register_capability_advertisement_type(bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM) 
-class support_4_octets_as_num(object):
 
+@bgp4_open.register_capability_advertisement_type(bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM)
+class support_4_octets_as_num(object):
     _PACK_STR = '!BBI'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
     def __init__(self, code, length, as_num):
         #code = bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM length = 4
-        self.code = code 
+        self.code = code
         self.length = length
         self.as_num = as_num
         if self.length == 2:
@@ -242,7 +249,7 @@ class support_4_octets_as_num(object):
         else:
             self._PACK_STR = '!BBI'
         self._MIN_LEN = struct.calcsize(self._PACK_STR)
-        
+
     @classmethod
     def parser(cls, buf, offset):
         code, length = struct.unpack_from('!BB', buf, offset)
@@ -257,6 +264,7 @@ class support_4_octets_as_num(object):
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR, self.code, self.length, self.as_num))
         return hdr
+
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
 class bgp4_update(object):
@@ -277,7 +285,7 @@ class bgp4_update(object):
     """
 
     _PACK_STR = '!HH'
-    _MIN_LEN = struct.calcsize(_PACK_STR) 
+    _MIN_LEN = struct.calcsize(_PACK_STR)
     _PATH_ATTRIBUTES = {}
 
     _ORIGIN = 1
@@ -293,6 +301,7 @@ class bgp4_update(object):
             for type_ in args:
                 bgp4_update._PATH_ATTRIBUTES[type_] = cls
             return cls
+
         return _register_path_attributes_type
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
@@ -307,7 +316,7 @@ class bgp4_update(object):
         self.total_len = total_len  # convenient to add nlri
         # nlri_len = total_len - 23 - path_attr_len - wd_rout_len
 
-    @classmethod   
+    @classmethod
     def parser(cls, buf, offset):
 
         (wd_rout_len,) = struct.unpack_from('!H', buf, offset)
@@ -317,18 +326,18 @@ class bgp4_update(object):
             offset += wd_rout_len
         (path_attr_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-        msg = cls(wd_rout_len, [], path_attr_len,[], [])
+        msg = cls(wd_rout_len, [], path_attr_len, [], [])
         len_ = path_attr_len
-       
+
         while len_ > 0:
-            (flag,code) = struct.unpack_from('!BB', buf,offset)
-            cls_ = cls._PATH_ATTRIBUTES.get(code,None)
+            (flag, code) = struct.unpack_from('!BB', buf, offset)
+            cls_ = cls._PATH_ATTRIBUTES.get(code, None)
             if cls_:
                 path_attr_msg = cls_.parser(buf, offset)
                 msg.path_attr.append(path_attr_msg)
                 len_ -= cls_._MIN_LEN
                 offset += cls_._MIN_LEN
-                
+
                 if path_attr_msg.__dict__.has_key('length'):
                     len_ -= path_attr_msg.length
                     offset += path_attr_msg.length
@@ -338,7 +347,7 @@ class bgp4_update(object):
                 if (flag & 0x10) == 0x10:
                     (length,) = struct.unpack_from('!H', buf, offset)
                     offset += 2 + length
-                    len_ -= 2 + length                      
+                    len_ -= 2 + length
                 elif (flag & 0x10) == 0:
                     (length,) = struct.unpack_from('!B', buf, offset)
                     offset += 1 + length
@@ -348,10 +357,10 @@ class bgp4_update(object):
            
         nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)
         nlri_len = 0
-        while len(buf) >offset:
+        while len(buf) > offset:
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
-            
+
             a = len_nlri / 8
             if len_nlri % 8 != 0:
                 a += 1   # aB
@@ -361,22 +370,23 @@ class bgp4_update(object):
             while len(temp_list) < 4:
                 temp_list.append(0)
             ip_nlri = convert.ipNum(*temp_list)  # ip int
-            print '** nlri ip,prefix',convert.ipv4_to_str(ip_nlri),len_nlri
-            _tuple = (len_nlri, ip_nlri) 
+            print '** nlri ip,prefix', convert.ipv4_to_str(ip_nlri), len_nlri
+            _tuple = (len_nlri, ip_nlri)
             nlri.add(_tuple)
             offset += a
-            nlri_len += 1+a
+            nlri_len += 1 + a
         update_total_len = 23 + path_attr_len + wd_rout_len + nlri_len
         msg.nlri = nlri
         msg.total_len = update_total_len
         return msg
+
 
     def serialize(self):
         #serialise wd_route_len and path_attr_len first
         hdr = bytearray(struct.pack(self._PACK_STR, self.wd_rout_len, self.path_attr_len))
         if self.path_attr != []:
             for attr in self.path_attr:
-                cls = self._PATH_ATTRIBUTES.get(attr.code,None)
+                cls = self._PATH_ATTRIBUTES.get(attr.code, None)
                 if cls:
                     hdr += attr.serialize()
                     self.path_attr_len += attr._MIN_LEN
@@ -388,13 +398,14 @@ class bgp4_update(object):
         #nlri
         nlri_len = 0
         if len(self.nlri) != 0:
-            for prefix,ip in self.nlri:
-                ip_list = convert.ipv4_to_list(ip,prefix)
-                b = len(ip_list)*'B'
-                hdr += bytearray(struct.pack('!B%s'%b, prefix, *ip_list))
+            for prefix, ip in self.nlri:
+                ip_list = convert.ipv4_to_list(ip, prefix)
+                b = len(ip_list) * 'B'
+                hdr += bytearray(struct.pack('!B%s' % b, prefix, *ip_list))
                 nlri_len += 1 + len(ip_list)
         print '## serialize nlri success'
         return hdr
+
 
 @bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
 class origin(object):
@@ -427,14 +438,15 @@ class origin(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, value) = struct.unpack_from(cls._PACK_STR+'B', buf, offset)
+        (flag, code, length, value) = struct.unpack_from(cls._PACK_STR + 'B', buf, offset)
         offset += cls._MIN_LEN + 1
         msg = cls(flag, code, length, value)
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack( self._PACK_STR+'B', self.flag, self.code, self.length, self.value))
+        hdr = bytearray(struct.pack(self._PACK_STR + 'B', self.flag, self.code, self.length, self.value))
         return hdr
+
 
 @bgp4_update.register_path_attributes_type(bgp4_update._AS_PATH)
 class as_path(object):
@@ -463,48 +475,50 @@ class as_path(object):
         self.flag = flag
         self.code = code
         self.length = length
-        self.as_type =  as_type
+        self.as_type = as_type
         self.as_len = as_len
         self.as_values = as_values
-      
+
         if ((flag & 0x10) == 0x10):
             self._PACK_STR = '!BBH'
-            self._MIN_LEN = struct.calcsize(self._PACK_STR) 
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
             self._PACK_STR = '!BBB'
             self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag,code) = struct.unpack_from('!BB', buf, offset)
+        (flag, code) = struct.unpack_from('!BB', buf, offset)
 
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
 
-        (flag, code, length, as_type, as_len) = struct.unpack_from(cls._PACK_STR+'BB', buf, offset)
+        (flag, code, length, as_type, as_len) = struct.unpack_from(cls._PACK_STR + 'BB', buf, offset)
         offset += cls._MIN_LEN + 2
         as_values = []
         for i in range(as_len):
             (as_value,) = struct.unpack_from('!I', buf, offset)
             offset += 2
             as_values.append(as_value)
-        print '** as',as_values
+        print '** as', as_values
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
 
 
     def serialize(self):
-        hdr = bytearray(struct.pack( self._PACK_STR+'BB', self.flag, self.code, self.length, self.as_type, self.as_len))
+        hdr = bytearray(
+            struct.pack(self._PACK_STR + 'BB', self.flag, self.code, self.length, self.as_type, self.as_len))
         self.length = 2
         for i in range(self.as_len):
-            hdr += bytearray(struct.pack('!I',self.as_values[i]))
+            hdr += bytearray(struct.pack('!I', self.as_values[i]))
             self.length += 4
-        struct.pack_into('!'+self._PACK_STR[3], hdr, 2, self.length)
+        struct.pack_into('!' + self._PACK_STR[3], hdr, 2, self.length)
         return hdr
+
 
 @bgp4_update.register_path_attributes_type(bgp4_update._NEXT_HOP)
 class next_hop(object):
@@ -523,9 +537,9 @@ class next_hop(object):
     """
 
     _PACK_STR = '!BBB'
-    _MIN_LEN = struct.calcsize(_PACK_STR) 
+    _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__( self,flag = 0x40, code = bgp4_update._NEXT_HOP, length = 4, _next_hop = None):
+    def __init__(self, flag=0x40, code=bgp4_update._NEXT_HOP, length=4, _next_hop=None):
         self.flag = flag
         self.code = code
         self.length = length
@@ -533,14 +547,14 @@ class next_hop(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, _int_next_hop) = struct.unpack_from(cls._PACK_STR+'I', buf, offset)
+        (flag, code, length, _int_next_hop) = struct.unpack_from(cls._PACK_STR + 'I', buf, offset)
         _next_hop = convert.ipv4_to_str(_int_next_hop)
-        print '** next_hop',_next_hop
+        print '** next_hop', _next_hop
         msg = cls(flag, code, length, _next_hop)
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack( self._PACK_STR+'I', self.flag, self.code, self.length, self._next_hop))
+        hdr = bytearray(struct.pack(self._PACK_STR + 'I', self.flag, self.code, self.length, self._next_hop))
         return hdr
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
@@ -563,8 +577,7 @@ class multi_exit_disk(object):
     _PACK_STR = 'BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,flag = 0x80, code = bgp4_update._MULTI_EXIT_DISK, length = 1, value = 0):
-       
+    def __init__(self, flag=0x80, code=bgp4_update._MULTI_EXIT_DISK, length=1, value=0):
         self.flag = flag
         self.code = code
         self.length = length
@@ -572,20 +585,20 @@ class multi_exit_disk(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, value) = struct.unpack_from( self._PACK_STR+'I', buf, offset)
+        (flag, code, length, value) = struct.unpack_from(self._PACK_STR + 'I', buf, offset)
         offset += cls._MIN_LEN + 4
-        msg = cls( flag, code, length, value)
+        msg = cls(flag, code, length, value)
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack( self._PACK_STR+'I', self.flag, self.code, self.length, self.value))
+        hdr = bytearray(struct.pack(self._PACK_STR + 'I', self.flag, self.code, self.length, self.value))
         return hdr
 
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_REACH_NLRI)
 class mp_reach_nlri(object):
-
-    def __init__( self, flag, code, length, addr_family, sub_addr_family, next_hop_len = 0, next_hop = None, num_of_snpas = 0, snpas = [], nlri = []):
+    def __init__(self, flag, code, length, addr_family, sub_addr_family, next_hop_len=0, next_hop=None, num_of_snpas=0,
+                 snpas=[], nlri=[]):
         #flag = 0x90, code = bgp4_update._MP_REACH_NLRI
         self.flag = flag
         self.code = code
@@ -596,107 +609,108 @@ class mp_reach_nlri(object):
         self.next_hop = next_hop
         self.num_of_snpas = num_of_snpas
         #snpas may in the form of [len1,value1,len2,value2]
-        self.snpas =snpas
+        self.snpas = snpas
         self.nlri = nlri
 
         if ((flag & 0x10) == 0x10):
             _PACK_STR = '!BBH'
-            _MIN_LEN = struct.calcsize(_PACK_STR) 
+            _MIN_LEN = struct.calcsize(_PACK_STR)
         else:
             _PACK_STR = '!BBB'
             _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag,code) = struct.unpack_from('!BB', buf, offset)
+        (flag, code) = struct.unpack_from('!BB', buf, offset)
 
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(_PACK_STR)
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR) 
+            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
 
-        (flag,code,length) = struct.unpack_from(cls._PACK_STR, buf, offset)
+        (flag, code, length) = struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN
 
         if length >= 4:
-            (addr_family,sub_addr_family, next_hop_len) = struct.unpack_from('!HBB', buf, offset)
+            (addr_family, sub_addr_family, next_hop_len) = struct.unpack_from('!HBB', buf, offset)
             offset += 4
 
         next_hop = None
-        if next_hop_len !=0:
+        if next_hop_len != 0:
             #next_hop_len == 4(ipv4) or 16(ipv6) 
-            (next_hop,) = struct.unpack_from('!%is'%next_hop_len, buf, offset)
+            (next_hop,) = struct.unpack_from('!%is' % next_hop_len, buf, offset)
             offset += next_hop_len
 
         if offset < len(buf):
             (num_of_snpas,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             snaps = []
-            if num_of_snpas != 0:                
+            if num_of_snpas != 0:
                 for i in range(num_of_snpas):
                     (len_of_snap,) = struct.unpack_from('!B', buf, offset)
                     offset += 1
                     snaps.append(len_of_snap)
-                    (snap,) = struct.unpack_from('!%is'%len_of_snap, buf , offset)
+                    (snap,) = struct.unpack_from('!%is' % len_of_snap, buf, offset)
                     offset += len_of_snap
                     snaps.append(snap)
 
         nlri = []
-        while offset < len(buf):                   
+        while offset < len(buf):
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             nlri.append(len_nlri)
-            a = len_nlri/8
-            b = len_nlri%8
+            a = len_nlri / 8
+            b = len_nlri % 8
 
             if b != 0:
                 a += 1
-                b = 8-b
-            para_nlri = struct.unpack_from('!%is'%a, buf, offset)
-            para_nlri >>= b 
+                b = 8 - b
+            para_nlri = struct.unpack_from('!%is' % a, buf, offset)
+            para_nlri >>= b
             offset += a
             nlri.append(para_nlri)
 
-        msg = cls(flag, code, length, addr_family, sub_addr_family, next_hop_len, next_hop, 
-            num_of_snpas, snpas, nlri)
+        msg = cls(flag, code, length, addr_family, sub_addr_family, next_hop_len, next_hop,
+                  num_of_snpas, snpas, nlri)
         return msg
 
     def serialize(self):
         #serialise wd_route_len and path_attr_len first
-        hdr = bytearray(struct.pack( self._PACK_STR+'HB', self.flag, self.code, self.length, self.addr_family, self.sub_addr_family))
+        hdr = bytearray(struct.pack(self._PACK_STR + 'HB', self.flag, self.code, self.length, self.addr_family,
+                                    self.sub_addr_family))
         self.length = 3
         if self.next_hop_len == 4:
-            hdr += bytearray(struct.pack('!BI',self.next_hop_len,self.next_hop))
+            hdr += bytearray(struct.pack('!BI', self.next_hop_len, self.next_hop))
             self.length += 4 + 1
         elif self.next_hop_len == 16:
-            hdr += bytearray(struct.pack('!B16s',self.next_hop_len,self.next_hop))
+            hdr += bytearray(struct.pack('!B16s', self.next_hop_len, self.next_hop))
             self.length += 16 + 1
         elif self.next_hop_len == 0:
-             hdr += bytearray(struct.pack('!B',self.next_hop_len))
-             self.length += 1
+            hdr += bytearray(struct.pack('!B', self.next_hop_len))
+            self.length += 1
 
-        hdr += bytearray(struct.pack('!B',self.num_of_snpas))
+        hdr += bytearray(struct.pack('!B', self.num_of_snpas))
         if self.num_of_snpas != 0:
             for i in range(self.num_of_snpas):
-                len_of_snap = self.snaps[2*i]
+                len_of_snap = self.snaps[2 * i]
                 if len_of_snap != 0:
-                    hdr += bytearray(struct.pack('!B%is'%len_of_snap, self.snaps[2*i], self.snaps[2*i+1]))
+                    hdr += bytearray(struct.pack('!B%is' % len_of_snap, self.snaps[2 * i], self.snaps[2 * i + 1]))
                 else:
-                    hdr += bytearray(struct.pack('!B',self.snaps[2*i]))
+                    hdr += bytearray(struct.pack('!B', self.snaps[2 * i]))
                 self.length += len_of_snap + 1
 
-        for i in range(len(self.nlri)/2):
-            len_nlri = nlri[2*i]
-            a = len_nlri/8
-            b = len_nlri%8
+        for i in range(len(self.nlri) / 2):
+            len_nlri = nlri[2 * i]
+            a = len_nlri / 8
+            b = len_nlri % 8
             if b != 0:
                 a += 1
-                self.nlri[2*i+1] <<= (8-b) 
-                hdr += bytearray(struct.pack('!B%is'%a, self.nlri[2*i], self.nlri[2*i+1]))
+                self.nlri[2 * i + 1] <<= (8 - b)
+                hdr += bytearray(struct.pack('!B%is' % a, self.nlri[2 * i], self.nlri[2 * i + 1]))
             elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B',self.nlri[2*i]))
+                hdr += bytearray(struct.pack('!B', self.nlri[2 * i]))
             self.length += a + 1
 
         if self._PACK_STR == '!BBH':
@@ -724,27 +738,27 @@ class mp_unreach_nlri(object):
         self.length = length
         self.addr_family = addr_family
         self.sub_addr_family = sub_addr_family
-        self.wd_routes = wd_routes        
+        self.wd_routes = wd_routes
 
         if ((flag & 0x10) == 0x10):
             _PACK_STR = '!BBH'
-            _MIN_LEN = struct.calcsize(_PACK_STR) 
+            _MIN_LEN = struct.calcsize(_PACK_STR)
         else:
             _PACK_STR = '!BBB'
             _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
-        
-        (flag,code) = struct.unpack_from('!BB', buf, offset)
+
+        (flag, code) = struct.unpack_from('!BB', buf, offset)
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(cls._PACK_STR) 
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR) 
+            cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR)
 
-        (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR+'BB', buf, offset)
+        (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR + 'BB', buf, offset)
         offset += cls._MIN_LEN
         msg = cls(flag, code, length, addr_family, sub_addr_family)
         len_ = length
@@ -753,38 +767,40 @@ class mp_unreach_nlri(object):
             (len_wd_route,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             msg.wd_routes.append(len_wd_route)
-            a = len_wd_route/8
-            b = len_wd_route%8
+            a = len_wd_route / 8
+            b = len_wd_route % 8
             if b != 0:
-                a += 1              
-            wd_route = struct.unpack_from('!%is'%a, buf, offset)
+                a += 1
+            wd_route = struct.unpack_from('!%is' % a, buf, offset)
             offset += a
             withdraw_nlri = NLRI(len_wd_route, wd_route)
             msg.wd_routes.append(withdraw_nlri)
-        return msg  
+        return msg
 
     def serialize(self):
         #serialise wd_route_len and path_attr_len first
-        hdr = bytearray(struct.pack( self._PACK_STR+'HB', self.flag, self.code, self.length, self.addr_family, self.sub_addr_family))
-        self.length = 3   
+        hdr = bytearray(struct.pack(self._PACK_STR + 'HB', self.flag, self.code, self.length, self.addr_family,
+                                    self.sub_addr_family))
+        self.length = 3
 
-        for i in range(len(self.wd_routes)/2):
-            len_wd_route = self.wd_routes[2*i]
-            a = len_wd_route/8
-            b = len_wd_route%8
+        for i in range(len(self.wd_routes) / 2):
+            len_wd_route = self.wd_routes[2 * i]
+            a = len_wd_route / 8
+            b = len_wd_route % 8
             if b != 0:
                 a += 1
-                self.wd_routes[2*i+1] <<= (8-b) 
-                hdr += bytearray(struct.pack('!B%is'%a, self.wd_routes[2*i], self.wd_routes[2*i+1]))
+                self.wd_routes[2 * i + 1] <<= (8 - b)
+                hdr += bytearray(struct.pack('!B%is' % a, self.wd_routes[2 * i], self.wd_routes[2 * i + 1]))
             elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B', self.wd_routes[2*i])) 
+                hdr += bytearray(struct.pack('!B', self.wd_routes[2 * i]))
             self.length += a + 1
 
         if self._PACK_STR == '!BBH':
             struct.pack_into('!H', hdr, 2, self.length)
         else:
             struct.pack_into('!B', hdr, 2, self.length)
-        return hdr 
+        return hdr
+
 
 @bgp4.register_bgp4_type(BGP4_NOTIFICATION)
 class bgp4_notification(object):
@@ -817,9 +833,9 @@ class bgp4_notification(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (err_code,err_subcode) = struct.unpack_from(cls._PACK_STR, buf, offset)
+        (err_code, err_subcode) = struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN
-        msg = cls( err_code, err_subcode)
+        msg = cls(err_code, err_subcode)
         if len(buf) > offset:
             msg.data = buf[offset:]
         return msg
