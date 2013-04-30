@@ -10,6 +10,23 @@ BGP4_KEEPALIVE = 4 #keepalive message only contain a header
 #BGP4_ROUTE_REFRESH = 5
 
 class bgp4(packet_base.PacketBase):
+    """
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +                                                               +
+    |                        Marker                                 |
+    +                                                               +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+           
+    |              Length           |       Type    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    
+    """
 
     _PACK_STR = '!16sHB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
@@ -40,7 +57,6 @@ class bgp4(packet_base.PacketBase):
         if len(buf) > offset:
             cls_ = cls._BGP4_TYPES.get(type_, None)
             if cls_:
-                #print cls_.__dict__
                 msg.data = cls_.parser( buf, offset)
             else:
                 msg.data = buf[offset:]
@@ -67,6 +83,28 @@ class bgp4(packet_base.PacketBase):
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
 class bgp4_open(object):
+    """
+    
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+
+    |   Version     |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |   My Autonomous System        |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Hold Time           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           BGP Identifier                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Opt Parm Len |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |               Optional Parameters (variable)                  |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    
+    """
+
     _PACK_STR = '!BHHIB'
     _MIN_LEN = struct.calcsize(_PACK_STR)   
     _CAPABILITY_ADVERTISEMENT = {}
@@ -222,6 +260,21 @@ class support_4_octets_as_num(object):
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
 class bgp4_update(object):
+    """
+
+    +-----------------------------------------------------+
+    |       Withdrawn Routes Length (2 octets)            |
+    +-----------------------------------------------------+
+    |       Withdrawn Routes (variable)                   |
+    +-----------------------------------------------------+
+    |       Total Path Attribute Length (2 octets)        |
+    +-----------------------------------------------------+
+    |       Path Attributes (variable)                    |
+    +-----------------------------------------------------+
+    |   Network Layer Reachability Information (variable) |
+    +-----------------------------------------------------+  
+    
+    """
 
     _PACK_STR = '!HH'
     _MIN_LEN = struct.calcsize(_PACK_STR) 
@@ -244,7 +297,8 @@ class bgp4_update(object):
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
-    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0, path_attr = [], nlri = set(),total_len = 0):
+    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0,
+                 path_attr = [], nlri = set(), total_len = 0):
         self.wd_rout_len = wd_rout_len
         self.wd_rout = wd_rout
         self.path_attr_len = path_attr_len
@@ -252,10 +306,10 @@ class bgp4_update(object):
         self.nlri = nlri
         self.total_len = total_len  # convenient to add nlri
         # nlri_len = total_len - 23 - path_attr_len - wd_rout_len
+
     @classmethod   
     def parser(cls, buf, offset):
 
-        #(wd_rout_len,path_attr_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
         (wd_rout_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
         # we don't handle wd_rote here,just skip it
@@ -290,8 +344,9 @@ class bgp4_update(object):
                     offset += 1 + length
                     len_ -= 1 + length
                 else:
-                    print '** here'            
-        nlri = set()    # set((prefix,ip),(prefix,ip),) eg (24,3232237568)
+                    print '** here'
+           
+        nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)
         nlri_len = 0
         while len(buf) >offset:
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
@@ -301,8 +356,8 @@ class bgp4_update(object):
             if len_nlri % 8 != 0:
                 a += 1   # aB
             b = a*'B'
-            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)#e.g (192,168,8,)
-            temp_list = list(ip_tuple) # need to append 0
+            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)  # e.g (192,168,8,)
+            temp_list = list(ip_tuple)  # need to append 0
             while len(temp_list) < 4:
                 temp_list.append(0)
             ip_nlri = convert.ipNum(*temp_list)  # ip int
@@ -316,11 +371,9 @@ class bgp4_update(object):
         msg.total_len = update_total_len
         return msg
 
-    
-
     def serialize(self):
         #serialise wd_route_len and path_attr_len first
-        hdr = bytearray(struct.pack( self._PACK_STR, self.wd_rout_len, self.path_attr_len))
+        hdr = bytearray(struct.pack(self._PACK_STR, self.wd_rout_len, self.path_attr_len))
         if self.path_attr != []:
             for attr in self.path_attr:
                 cls = self._PATH_ATTRIBUTES.get(attr.code,None)
@@ -342,15 +395,31 @@ class bgp4_update(object):
                 nlri_len += 1 + len(ip_list)
         print '## serialize nlri success'
         return hdr
-       
+
 @bgp4_update.register_path_attributes_type(bgp4_update._ORIGIN)
 class origin(object):
+    
+    """
+
+    0                   1
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Attr. Flags   |Attr. Type Code|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+    Value:
+    0   --  IGP 
+    1   --  EGP 
+    2   --  INCOMPLETE
+
+    """
 
     _PACK_STR = 'BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,flag = 0x40, code = bgp4_update._ORIGIN, length = 1, value = 1):
-        #value: 0--IGP 1--EGP 2--INCOMPLETE
+    def __init__(self,flag = 0x40, code = bgp4_update._ORIGIN,
+                 length = 1, value = 1):
+        
         self.flag = flag
         self.code = code
         self.length = length
@@ -358,9 +427,9 @@ class origin(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, value) = struct.unpack_from( cls._PACK_STR+'B', buf, offset)
+        (flag, code, length, value) = struct.unpack_from(cls._PACK_STR+'B', buf, offset)
         offset += cls._MIN_LEN + 1
-        msg = cls( flag, code, length, value)
+        msg = cls(flag, code, length, value)
         return msg
 
     def serialize(self):
@@ -369,7 +438,27 @@ class origin(object):
 
 @bgp4_update.register_path_attributes_type(bgp4_update._AS_PATH)
 class as_path(object):
-    def __init__( self,flag, code, length, as_type, as_len, as_values =[]):
+
+    """
+
+    0                   1
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Attr. Flags   |Attr. Type Code|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+    
+    
+    Value:  some As path segments like follows
+
+    trible<path segment type, path segment length, path segment value>
+    
+    path segment type:
+    1   --    AS_SET
+    2   --    AS_SEQUENCE
+
+    """
+
+    # TODO need to modify by referring to rfc4271,4.3
+    def __init__(self,flag, code, length, as_type, as_len, as_values =[]):
         #flag = 0x80, length = 0,code = bgp4_update._AS_PATH
         self.flag = flag
         self.code = code
@@ -418,7 +507,21 @@ class as_path(object):
         return hdr
 
 @bgp4_update.register_path_attributes_type(bgp4_update._NEXT_HOP)
-class next_hop(object):    
+class next_hop(object):
+
+    """
+
+    0                   1
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Attr. Flags   |Attr. Type Code|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+    
+    
+    Value:
+    IP address in Integer form
+
+    """
+
     _PACK_STR = '!BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR) 
 
@@ -440,9 +543,22 @@ class next_hop(object):
         hdr = bytearray(struct.pack( self._PACK_STR+'I', self.flag, self.code, self.length, self._next_hop))
         return hdr
 
-
 @bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
 class multi_exit_disk(object):
+    
+    """
+
+    0                   1
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Attr. Flags   |Attr. Type Code|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+    Value:
+    four-octet unsigned integer
+    Usage in rfc4271,5.1.4
+
+    """
 
     _PACK_STR = 'BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
@@ -600,7 +716,8 @@ class NLRI(object):
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
 
-    def __init__( self, flag, code, length, addr_family, sub_addr_family, wd_routes = []):
+    def __init__(self, flag, code, length, addr_family,
+                 sub_addr_family, wd_routes = []):
         #flag = 0x90,code = bgp4_update._MP_UNREACH_NLRI
         self.flag = flag
         self.code = code
@@ -667,11 +784,28 @@ class mp_unreach_nlri(object):
             struct.pack_into('!H', hdr, 2, self.length)
         else:
             struct.pack_into('!B', hdr, 2, self.length)
-        return hdr
-   
+        return hdr 
 
 @bgp4.register_bgp4_type(BGP4_NOTIFICATION)
 class bgp4_notification(object):
+
+    """
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Error code    | Error subcode |       Data (variable)         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+    Error Code      Symbolic Name               Reference
+    1               Message Header Error        Section 6.1
+    2               OPEN Message Error          Section 6.2
+    3               UPDATE Message Error        Section 6.3
+    4               Hold Timer Expired          Section 6.5
+    5               Finite State Machine Error  Section 6.6
+    6               Cease Section 6.7 
+
+    """
 
     _PACK_STR = '!BB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
