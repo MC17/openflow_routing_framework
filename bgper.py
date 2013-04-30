@@ -20,10 +20,14 @@ class BGPer(app_manager.RyuApp):
         super(BGPer, self).__init__(*args, **kwargs)
         self.name = 'bgper'
         self.server = Server(handler)
+        g = gevent.Greenlet(self.server)
+        g.start()
         gevent.spawn(self._test)
+        g.join()
 
     def _test(self):
         while True:
+            print 'looping...'
             for k,v in BGPer.peers.iteritems():
                 print k, v
 
