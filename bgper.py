@@ -19,7 +19,7 @@ class BGPer(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(BGPer, self).__init__(*args, **kwargs)
         self.name = 'bgper'
-        self.server = Server(16)
+        self.server = Server(handler)
         gevent.spawn(self._test)
 
     def _test(self):

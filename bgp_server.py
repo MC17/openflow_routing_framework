@@ -181,7 +181,7 @@ class Connection(object):
 
         # nlri 
         nlri = set()
-        local_ip = (24,convert.ipv4_to_int('192.168.48.0')) # (prefix,ip)
+        local_ip = (24,convert.ipv4_to_int('192.168.56.101')) # (prefix,ip)
         nlri.add(local_ip)
 
         update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
