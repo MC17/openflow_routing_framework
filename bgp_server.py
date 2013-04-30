@@ -9,7 +9,9 @@ from gevent import Greenlet
 import contextlib
 import greenlet
 import traceback
+
 from ryu.lib.packet import packet, ethernet
+
 import BGP4
 import convert
 
@@ -22,9 +24,10 @@ BGP4_HEADER_SIZE = struct.calcsize(bgp4_PACK_STR)
 
 class Server(object):
     
-    def __init__(self, conn_num, *args, **kwargs):
+    def __init__(self, handler, conn_num = 128, *args, **kwargs):
         super(Server, self).__init__()
         self.conn_num = conn_num
+        self.handler = handler
 
     def __call__(self):
         self.server_loop()
@@ -32,7 +35,7 @@ class Server(object):
     def server_loop(self):
 
         pool = Pool(self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), handler, spawn=pool)
+        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler, spawn=pool)
 
         print "Starting server..."
         server.serve_forever()
@@ -243,18 +246,11 @@ class Connection(object):
     
     def send_open_msg(self):
         pass
-          
 
-   
 
-def handler(socket, address):
-    print 'connect from ',address
-    with contextlib.closing(Connection(socket, address)) as connection:
-        try:
-            connection.serve()
-        except:
-            print "Error in the connection from " ,address
-            raise
+
+
+
         
 
 if __name__ == '__main__':
