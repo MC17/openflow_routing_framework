@@ -585,7 +585,7 @@ class multi_exit_disk(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (flag, code, length, value) = struct.unpack_from(self._PACK_STR + 'I', buf, offset)
+        (flag, code, length, value) = struct.unpack_from(cls._PACK_STR + 'I', buf, offset)
         offset += cls._MIN_LEN + 4
         msg = cls(flag, code, length, value)
         return msg
@@ -625,10 +625,10 @@ class mp_reach_nlri(object):
 
         if ((flag & 0x10) == 0x10):
             cls._PACK_STR = '!BBH'
-            cls._MIN_LEN = struct.calcsize(_PACK_STR)
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
 
         (flag, code, length) = struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN
@@ -673,7 +673,7 @@ class mp_reach_nlri(object):
             nlri.append(para_nlri)
 
         msg = cls(flag, code, length, addr_family, sub_addr_family, next_hop_len, next_hop,
-                  num_of_snpas, snpas, nlri)
+                  num_of_snpas, snaps, nlri)
         return msg
 
     def serialize(self):
@@ -702,7 +702,7 @@ class mp_reach_nlri(object):
                 self.length += len_of_snap + 1
 
         for i in range(len(self.nlri) / 2):
-            len_nlri = nlri[2 * i]
+            len_nlri = self.nlri[2 * i]
             a = len_nlri / 8
             b = len_nlri % 8
             if b != 0:

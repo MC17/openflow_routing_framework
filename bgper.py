@@ -19,8 +19,8 @@ class BGPer(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(BGPer, self).__init__(*args, **kwargs)
         self.name = 'bgper'
-        self.server = Server(handler)
-        g = gevent.Greenlet(self.server)
+        server = Server(handler)
+        g = gevent.Greenlet(server)
         g.start()
         gevent.spawn(self._test)
         g.join()

@@ -246,11 +246,6 @@ class Connection(object):
     
     def send_open_msg(self):
         pass
-
-
-
-
-
         
 
 if __name__ == '__main__':
