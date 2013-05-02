@@ -233,11 +233,23 @@ class multi_protocol_extension(object):
                      |      AFI      | Res.  | SAFI  |
                      +-------+-------+-------+-------+
         AFI: Address Family Identifier(16 bit)
-        Res.: reserved(8 bit)
+        Res.: reserved(8 bit)   should set default 0
         SAFI: Subsequent Address Family Identifier(8 bit)
 
         for AFI and SAFI values, search http://www.iana.org/protocols,
         with keyword "Address Family Numbers" and "SAFI"
+
+        e.g.
+        AFI
+        other -- 0
+        ipv4 --  1
+        ipv6 --  2
+
+        SAFI
+        0 --  reserved
+        1 --  unicast
+        2 --  multicast
+
     """
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
@@ -657,6 +669,30 @@ class multi_exit_disk(object):
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_REACH_NLRI)
 class mp_reach_nlri(object):
+    """
+        ref: rfc4760,3
+        Type Code: 14
+        +---------------------------------------------------------+
+        | Address Family Identifier (2 octets)                    |
+        +---------------------------------------------------------+
+        | Subsequent Address Family Identifier (1 octet)          |
+        +---------------------------------------------------------+
+        | Length of Next Hop Network Address (1 octet)            |
+        +---------------------------------------------------------+
+        | Network Address of Next Hop (variable)                  |
+        +---------------------------------------------------------+
+        | Reserved (1 octet)                                      |
+        +---------------------------------------------------------+
+        | Network Layer Reachability Information (variable)       |
+        +---------------------------------------------------------+
+
+        AFI: same to multi_protocol_extension
+        SAFI: same to multi_protocol_extension
+        Length: express the length of the "Network Address of Next Hop" field,measured in octets
+        
+        
+    """
+
     def __init__(self, flag, code, length, addr_family, sub_addr_family, next_hop_len=0, next_hop=None, num_of_snpas=0,
                  snpas=[], nlri=[]):
         #flag = 0x90, code = bgp4_update._MP_REACH_NLRI
@@ -789,6 +825,18 @@ class NLRI(object):
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)
 class mp_unreach_nlri(object):
+    """
+    ref:rfc4760,4
+
+    +---------------------------------------------------------+
+    | Address Family Identifier (2 octets)                    |
+    +---------------------------------------------------------+
+    | Subsequent Address Family Identifier (1 octet)          |
+    +---------------------------------------------------------+
+    | Withdrawn Routes (variable)                             |
+    +---------------------------------------------------------+
+
+    """
 
     def __init__(self, flag, code, length, addr_family,
                  sub_addr_family, wd_routes = []):
