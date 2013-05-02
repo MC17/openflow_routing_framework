@@ -18,8 +18,8 @@ import convert
 
 BGP_TCP_PORT = 179  # 179
 
-bgp4_PACK_STR = '!16sHB'
-BGP4_HEADER_SIZE = struct.calcsize(bgp4_PACK_STR)
+BGP4_PACK_STR = BGP4.bgp4._PACK_STR
+BGP4_HEADER_SIZE = BGP4.bgp4.BGP4_HEADER_SIZE
 
 
 class Server(object):
@@ -72,50 +72,29 @@ class Connection(object):
 
     @_deactivate
     def _recv_loop(self):
-        buf = bytearray()       
-        required_len = BGP4_HEADER_SIZE
-        packet_len = 0 
-        msg_type = 0
+        header_size = BGP4_HEADER_SIZE
         
-        #count = 0
         while self.is_active:
-            ret = self.socket.recv(required_len)
-            print 'receive socket data length',len(ret)
-            if len(ret) == 0:
+            buf = bytearray()     
+            recv = self.socket.recv(header_size)
+            if len(recv) == 0:
                 self.is_active = False
                 break
-            buf += ret           
-            # a little question ?
-            while len(buf) >= required_len:
-                if packet_len == 0:
-                    (marker,length,type_) = struct.unpack('!16sHB',buffer(buf))
-                    packet_len = length
-                    msg_type = type_
-                    #print 'msg_type is ',msg_type 
-                    required_len = length - required_len
-                    #handle keepalive message
-                    if required_len == 0:
-                        msg = BGP4.bgp4.parser(buffer(buf[0:packet_len])) 
-                        self._handle(msg)
-                        buf = buf[packet_len:]
-                        required_len = BGP4_HEADER_SIZE 
-                        packet_len = 0
-                        msg_type = 0                    
-                        gevent.sleep(0)
-                    break
-                else:
-                    msg = BGP4.bgp4.parser(buffer(buf[0:packet_len])) 
-                    self._handle(msg)
-                    buf = buf[packet_len:]
-                    required_len = BGP4_HEADER_SIZE 
-                    packet_len = 0
-                    msg_type = 0
-                    #count += 1
-                    #if count > 20:
-                    gevent.sleep(0)
-                    
+            
+            buf += recv
+            (marker, packet_len, msg_type) = struct.unpack(BGP4_PACK_STR,
+                                                           buffer(buf))
+            required_len = packet_len - header_size
+            
+            if required_len != 0:
+                more_data = self.socket.recv(required_len)
+                buf += more_data
+                assert len(buf) == packet_len
 
-                
+            msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
+            self._handle(msg)
+            gevent.sleep(0)
+                    
                 
 
     def _handle(self, msg):
@@ -145,8 +124,8 @@ class Connection(object):
         cp_ad = []
         cp_ad.append(BGP4.multi_protocol_extension(1,4,1,0x00,1))
         cp_ad.append(BGP4.route_refresh(2,0))
-        cp_ad.append(BGP4.support_4_octets_as_num(65,4,100))#as_num =100
-        open_reply = BGP4.bgp4_open(4,100,240,'10.109.242.53',0,2,0,cp_ad)
+        cp_ad.append(BGP4.support_4_octets_as_num(65,4,64496))#as_num =100
+        open_reply = BGP4.bgp4_open(4,64496,240,'10.109.242.118',0,2,0,cp_ad)
         bgp4_reply = BGP4.bgp4(1,0,1,open_reply)       
         p = packet.Packet()
         p.add_protocol(bgp4_reply)        
