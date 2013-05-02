@@ -43,7 +43,7 @@ class bgp4(packet_base.PacketBase):
 
         return _register_bgp4_type
 
-    def __init__(self, marker, length, type_, data=None):
+    def __init__(self, type_, marker = 1, length = 0, data = None):
         #length default value is 0
         super(bgp4, self).__init__()
         self.marker = marker
@@ -55,7 +55,7 @@ class bgp4(packet_base.PacketBase):
     def parser(cls, buf):
         (marker_, length, type_) = struct.unpack_from(cls._PACK_STR, buf)
         marker = (struct.unpack_from('!4I', marker_)[0]) & 0x1
-        msg = cls(marker, length, type_)
+        msg = cls(marker = marker, length = length, type_ = type_)
         offset = cls._MIN_LEN
         if len(buf) > offset:
             cls_ = cls._BGP4_TYPES.get(type_, None)
@@ -82,7 +82,10 @@ class bgp4(packet_base.PacketBase):
             if self.length != len(hdr):
                 self.length = len(hdr)
                 struct.pack_into('!H', hdr, 16, self.length)
-        return hdr
+        
+            return hdr
+        else:
+            return None
 
 
 @bgp4.register_bgp4_type(BGP4_OPEN)
@@ -183,7 +186,6 @@ class bgp4_open(object):
                       opt_para_len)
             return msg
 
-            
         msg.data = []
         buf = buffer(buf[offset:])
         while len(buf) > 0:

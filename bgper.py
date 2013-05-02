@@ -9,6 +9,7 @@ from ryu.controller.handler import (HANDSHAKE_DISPATCHER, MAIN_DISPATCHER,
 import dest_event
 import convert
 from bgp_server import Server, Connection
+import BGP4
 
 
 class BGPer(app_manager.RyuApp):
@@ -16,9 +17,25 @@ class BGPer(app_manager.RyuApp):
         the BGP part of this project(aka. "B")
     """
     peers = {}
+
     def __init__(self, *args, **kwargs):
         super(BGPer, self).__init__(*args, **kwargs)
         self.name = 'bgper'
+
+        # XXX should read from config file
+        Server.local_ip = '10.109.242.118'
+        Server.local_as = 64496
+        Server.capabilities = []
+        Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
+                            length = 4, addr_family = 1,res = 0x00,
+                            sub_addr_family = 1))
+        Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
+                            length = 4, addr_family = 2,res = 0x00,
+                            sub_addr_family = 1))
+        Server.capabilities.append(BGP4.route_refresh(2,0))
+        Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
+                                                        Server.local_as))
+
         server = Server(handler)
         g = gevent.Greenlet(server)
         g.start()
@@ -49,12 +66,9 @@ def handler(socket, address):
     with contextlib.closing(Connection(socket, address)) as connection:
         try:
             BGPer.peers[address] = connection
-            # XXX should read from some config file here
-            connection.local_ip = '10.109.242.118'
-            connection.local_as = 64496
             connection.serve()
         except:
-            print "Error in the connection from " ,address
+            print "Error in the connection from ", address
             raise
         finally:
             del BGPer.peers[address]
