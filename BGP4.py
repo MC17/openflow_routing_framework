@@ -106,7 +106,32 @@ class bgp4_open(object):
     |               Optional Parameters (variable)                  |
     |                                                               |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    
+
+
+    Optional Parameters:
+
+    a list of <Parameter Type, Parameter Length, Parameter Value> triplet
+
+    0                   1
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-...
+    |  Parm. Type   | Parm. Length  |  Parameter Value (variable)
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-...
+
+    Type = 2 for Capabilities
+
+    BGP capability advertisement(RFC 5492)
+
+          +------------------------------+
+          | Capability Code (1 octet)    |
+          +------------------------------+
+          | Capability Length (1 octet)  |
+          +------------------------------+
+          | Capability Value (variable)  |
+          ~                              ~
+          +------------------------------+
+
+          Capability Length is the length of "Capability Value"
     """
 
     _PACK_STR = '!BHHIB'
@@ -129,9 +154,9 @@ class bgp4_open(object):
 
         return _register_capability_advertisement_type
 
-        #using capabilities adverstisement in it's optional parameters' field
-
-    def __init__(self, version, my_as, hold_time, bgp_identifier, opt_para_len=0, type_=2, para_len=0, data=[]):
+    # using capabilities adverstisement in it's optional parameters' field
+    def __init__(self, version, my_as, hold_time, bgp_identifier,
+                 opt_para_len=0, type_=2, para_len=0, data=[]):
         self.version = version
         self.my_as = my_as
         self.hold_time = hold_time
@@ -143,27 +168,31 @@ class bgp4_open(object):
 
     @classmethod
     def parser(cls, buf, offset):
-        (version, my_as, hold_time, bgp_identifier, opt_para_len) = struct.unpack_from(cls._PACK_STR, buf, offset)
+        (version, my_as, hold_time, bgp_identifier, opt_para_len) = \
+                        struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN
 
         bgp_identifier = convert.ipv4_to_str(bgp_identifier)
         if opt_para_len >= 2:
             (type_, para_len) = struct.unpack_from('!BB', buf, offset)
             offset += 2
-            msg = cls(version, my_as, hold_time, bgp_identifier, opt_para_len, type_, para_len)
+            msg = cls(version, my_as, hold_time, bgp_identifier,
+                      opt_para_len, type_, para_len)
         else:
-            msg = cls(version, my_as, hold_time, bgp_identifier, opt_para_len)
+            msg = cls(version, my_as, hold_time, bgp_identifier,
+                      opt_para_len)
+            return msg
 
+            
         msg.data = []
-        if len(buf) > offset:
-            #capability advertisement  2
-            length = msg.opt_para_len - 2
-            while length >= 2:
-                code, len_ = struct.unpack_from('!BB', buf, offset)
-                cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
-                if cls_:
-                    msg.data.append(cls_.parser(buf, offset))
-                length -= (len_ + 2)
+        buf = buffer(buf[offset:])
+        while len(buf) > 0:
+            code, len_ = struct.unpack_from('!BB', buf)
+            cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
+            if cls_:
+                msg.data.append(cls_.parser(buf, 0))
+            offset += len_ + 2
+            buf = buffer(buf[len_+2:])
 
         return msg
 
@@ -187,19 +216,6 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
-"""
-BGP capability advertisement(RFC 5492)
-
-          +------------------------------+
-          | Capability Code (1 octet)    |
-          +------------------------------+
-          | Capability Length (1 octet)  |
-          +------------------------------+
-          | Capability Value (variable)  |
-          ~                              ~
-          +------------------------------+
-
-"""
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCOL_EXTENSION)
 class multi_protocol_extension(object):
