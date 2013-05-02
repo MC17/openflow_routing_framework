@@ -136,8 +136,8 @@ class Connection(object):
         cp_ad.append(BGP4.multi_protocol_extension(code = 1,length = 4,
                     addr_family = 1,res = 0x00, sub_addr_family = 1))
         cp_ad.append(BGP4.route_refresh(2,0))
-        cp_ad.append(BGP4.support_4_octets_as_num(65,4,64496))
-        open_reply = BGP4.bgp4_open(4,64496,240,'10.109.242.118',0,2,0,cp_ad)
+        cp_ad.append(BGP4.support_4_octets_as_num(65,4,self.local_as))
+        open_reply = BGP4.bgp4_open(4,self.local_as,240,self.local_ip,0,2,0,cp_ad)
         bgp4_reply = BGP4.bgp4(1,0,1,open_reply)
         p = packet.Packet()
         p.add_protocol(bgp4_reply)
