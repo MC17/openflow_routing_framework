@@ -65,6 +65,18 @@ class Connection(object):
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
         self.send_q = Queue(1)
+
+        # data structures for BGP
+        self.local_ip = None
+        self.local_as = None
+        self.local_id = None
+        self.local_capabilites = []
+        self.peer_ip = None
+        self.peer_as = None
+        self.peer_id = None
+        self.peer_capabilities = []
+        self._4or6 = 4
+        self.hold_time = 240
     
     def close(self):
         print "close the connect from", self.address
@@ -89,8 +101,8 @@ class Connection(object):
             if required_len != 0:
                 more_data = self.socket.recv(required_len)
                 buf += more_data
-                assert len(buf) == packet_len
 
+            assert len(buf) == packet_len
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
             gevent.sleep(0)
@@ -112,23 +124,23 @@ class Connection(object):
             self._handle_keepalive(msg)
             print 'receive KEEPALIVE msg'
         else:
-            print 'receive else msg_type',msg_type
+            print 'receive unknown msg_type', msg_type
 
     def _handle_open(self,msg):
 
         #print type(msg),msg.__dict__,msg.data.__dict__
 
-        
         #if self.send_thr != None:
         hdr = bytearray()
         cp_ad = []
-        cp_ad.append(BGP4.multi_protocol_extension(1,4,1,0x00,1))
+        cp_ad.append(BGP4.multi_protocol_extension(code = 1,length = 4,
+                    addr_family = 1,res = 0x00, sub_addr_family = 1))
         cp_ad.append(BGP4.route_refresh(2,0))
-        cp_ad.append(BGP4.support_4_octets_as_num(65,4,64496))#as_num =100
+        cp_ad.append(BGP4.support_4_octets_as_num(65,4,64496))
         open_reply = BGP4.bgp4_open(4,64496,240,'10.109.242.118',0,2,0,cp_ad)
-        bgp4_reply = BGP4.bgp4(1,0,1,open_reply)       
+        bgp4_reply = BGP4.bgp4(1,0,1,open_reply)
         p = packet.Packet()
-        p.add_protocol(bgp4_reply)        
+        p.add_protocol(bgp4_reply)
         p.serialize()
 
         #print bgp4_reply.marker

@@ -187,9 +187,40 @@ class bgp4_open(object):
         struct.pack_into('!B', hdr, 11, self.para_len)
         return hdr
 
+"""
+BGP capability advertisement(RFC 5492)
+
+          +------------------------------+
+          | Capability Code (1 octet)    |
+          +------------------------------+
+          | Capability Length (1 octet)  |
+          +------------------------------+
+          | Capability Value (variable)  |
+          ~                              ~
+          +------------------------------+
+
+"""
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._MULTI_PROTOCOL_EXTENSION)
 class multi_protocol_extension(object):
+    """
+        Multi-protocol capability advertisement(RFC 4760)
+
+        Capability Code = 1
+        Capability Length = 4
+        Capability Value field:
+
+                     0       7      15      23      31
+                     +-------+-------+-------+-------+
+                     |      AFI      | Res.  | SAFI  |
+                     +-------+-------+-------+-------+
+        AFI: Address Family Identifier(16 bit)
+        Res.: reserved(8 bit)
+        SAFI: Subsequent Address Family Identifier(8 bit)
+
+        for AFI and SAFI values, search http://www.iana.org/protocols,
+        with keyword "Address Family Numbers" and "SAFI"
+    """
     _PACK_STR = '!BBHBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
@@ -215,6 +246,11 @@ class multi_protocol_extension(object):
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._ROUTE_REFRESH)
 class route_refresh(object):
+    """
+        RFC 2918:
+        This capability is advertised using the Capability code 2 
+        and Capability length 0.
+    """
     _PACK_STR = '!BB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
@@ -236,6 +272,12 @@ class route_refresh(object):
 
 @bgp4_open.register_capability_advertisement_type(bgp4_open._SUPPORT_FOR_4_OCTETS_AS_NUM)
 class support_4_octets_as_num(object):
+    """
+        RFC 4893:
+        Capability Code = 65
+        Capability Length = 4
+        Capability Value: the 4-octet AS number
+    """
     _PACK_STR = '!BBI'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 

@@ -49,6 +49,9 @@ def handler(socket, address):
     with contextlib.closing(Connection(socket, address)) as connection:
         try:
             BGPer.peers[address] = connection
+            # XXX should read from some config file here
+            connection.local_ip = '10.109.242.118'
+            connection.local_as = 64496
             connection.serve()
         except:
             print "Error in the connection from " ,address
