@@ -1,7 +1,7 @@
-import  gevent
 import contextlib
 
 from ryu.base import app_manager
+from ryu.lib import hub
 from ryu.controller.handler import set_ev_cls
 from ryu.controller.handler import (HANDSHAKE_DISPATCHER, MAIN_DISPATCHER,
                                     CONFIG_DISPATCHER, DEAD_DISPATCHER)
@@ -37,10 +37,9 @@ class BGPer(app_manager.RyuApp):
                                                         Server.local_as))
 
         server = Server(handler)
-        g = gevent.Greenlet(server)
-        g.start()
-        gevent.spawn(self._test)
-        g.join()
+        g = hub.spawn(server)
+        hub.spawn(self._test)
+        g.wait()
 
     def _test(self):
         while True:
@@ -48,7 +47,7 @@ class BGPer(app_manager.RyuApp):
             for k,v in BGPer.peers.iteritems():
                 print k, v
 
-            gevent.sleep(3)
+            hub.sleep(3)
 
     @set_ev_cls(dest_event.EventDestinationRequest)
     def destination_request_handler(self, event):

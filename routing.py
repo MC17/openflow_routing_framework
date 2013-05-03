@@ -1,8 +1,7 @@
-import gevent
-
 import time
 
 from ryu.base import app_manager
+from ryu.lib import hub
 from ryu.controller.handler import set_ev_cls
 from ryu.controller.handler import ( MAIN_DISPATCHER,
                                     CONFIG_DISPATCHER )
@@ -42,12 +41,12 @@ class Routing(app_manager.RyuApp):
         except:
             print "File %s Parse Error" % self.filepath
 
-        #gevent.spawn(self._test)
+        #hub.spawn(self._test)
 
     def _test(self):
         while True:
             self.__test()
-            gevent.sleep(3)
+            hub.sleep(3)
 
     def __test(self):
         print '-------------------'

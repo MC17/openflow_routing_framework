@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
-import gevent
 import struct
-from gevent.server import StreamServer
-from gevent.pool import Pool
-from gevent.queue import Queue
-from gevent import Greenlet
+from ryu.lib import hub
+from ryu.lib.hub import StreamServer
 import contextlib
 import greenlet
 import traceback
@@ -34,8 +31,7 @@ class Server(object):
 
     def server_loop(self):
 
-        pool = Pool(self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler, spawn=pool)
+        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -64,7 +60,7 @@ class Connection(object):
 
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
-        self.send_q = Queue(1)
+        self.send_q = hub.Queue(1)
 
         # data structures for BGP
         self.peer_ip = None
@@ -102,7 +98,7 @@ class Connection(object):
             assert len(buf) == packet_len
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
-            gevent.sleep(0)
+            hub.sleep(0)
                     
                 
 
@@ -236,13 +232,13 @@ class Connection(object):
             self.send_q.put(buf)
 
     def serve(self):
-        send_thr = gevent.spawn(self._send_loop)
+        send_thr = hub.spawn(self._send_loop)
        
         try:
             self._recv_loop()
         finally:
-            gevent.kill(send_thr)
-            gevent.joinall([send_thr])
+            hub.kill(send_thr)
+            hub.joinall([send_thr])
 
     #
     #  Utility methods for convenience
@@ -263,6 +259,7 @@ class Connection(object):
             input: err_code, err_subcode, and data 
             output: send msg
         """
+        # XXX
         pass
 
 if __name__ == '__main__':
