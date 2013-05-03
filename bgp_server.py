@@ -35,7 +35,11 @@ class Server(object):
     def server_loop(self):
 
         pool = Pool(self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler, spawn=pool)
+        #listen ipv4 and ipv6 connection
+        listener = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        listener.bind(('::',BGP_TCP_PORT,0,0))
+        listener.listen(self.conn_num)
+        server = StreamServer(listener, self.handler, spawn=pool)
 
         print "Starting server..."
         server.serve_forever()
@@ -264,9 +268,10 @@ class Connection(object):
             output: send msg
         """
         pass
-
+'''
 if __name__ == '__main__':
     s = Server(10)
     g = Greenlet(s)
     g.start()
     g.join()
+'''
