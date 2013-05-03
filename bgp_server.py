@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+import socket
 import struct
 from ryu.lib import hub
 from ryu.lib.hub import StreamServer
+from eventlet.queue import Queue
+import eventlet
 import contextlib
-import greenlet
 import traceback
 
 from ryu.lib.packet import packet, ethernet
@@ -31,12 +33,17 @@ class Server(object):
 
     def server_loop(self):
 
-        pool = Pool(self.conn_num)
+        
         #listen ipv4 and ipv6 connection
-        listener = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        listener.bind(('::',BGP_TCP_PORT,0,0))
-        listener.listen(self.conn_num)
-        server = StreamServer(listener, self.handler, spawn=pool)
+        #listener = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        #listener.bind(('::',BGP_TCP_PORT,0,0))
+        #listener.listen(self.conn_num)
+        #server = StreamServer(listener, self.handler)
+        #addr = ('0.0.0.0', BGP_TCP_PORT)
+        #listen_info = (('0.0.0.0', BGP_TCP_PORT), socket.AF_INET, self.conn_num)
+
+        listen_info = ('0.0.0.0', BGP_TCP_PORT)
+        server = StreamServer( listen_info, self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -45,7 +52,7 @@ def _deactivate(method):
     def deactivate(self):
         try:
             method(self)
-        except greenlet.GreenletExit:
+        except eventlet.StopServe:
             pass
         except:
             traceback.print_exc()
@@ -61,11 +68,10 @@ class Connection(object):
         self.socket = socket
         self.address = address
         self.is_active = True
-        #self.send_thr = None
-
+        
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
-        self.send_q = hub.Queue(1)
+        self.send_q = Queue(1)
 
         # data structures for BGP
         self.peer_ip = None
@@ -103,7 +109,7 @@ class Connection(object):
             assert len(buf) == packet_len
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
-            hub.sleep(0)
+            eventlet.sleep(0)
                     
                 
 
@@ -196,11 +202,11 @@ class Connection(object):
 
         update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
         # path_attr_len will calculate automatic in serialize 
-        bgp4_reply = BGP4.bgp4(1, 46,BGP4.BGP4_UPDATE, update_reply)
+        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
         p = packet.Packet()
         p.add_protocol(bgp4_reply)
         p.serialize()
-        self.send(p.data)
+        #self.send(p.data)
 
         print '---------send update test success'
         
@@ -264,12 +270,4 @@ class Connection(object):
             input: err_code, err_subcode, and data 
             output: send msg
         """
-        # XXX
         pass
-'''
-if __name__ == '__main__':
-    s = Server(10)
-    g = Greenlet(s)
-    g.start()
-    g.join()
-'''
