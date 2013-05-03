@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import gevent
+import socket
 import struct
 from gevent.server import StreamServer
 from gevent.pool import Pool
@@ -16,7 +17,7 @@ import BGP4
 import convert
 
 
-BGP_TCP_PORT = 179
+BGP_TCP_PORT = 179  # 179
 
 BGP4_PACK_STR = BGP4.bgp4._PACK_STR
 BGP4_HEADER_SIZE = BGP4.bgp4.BGP4_HEADER_SIZE
@@ -35,7 +36,13 @@ class Server(object):
     def server_loop(self):
 
         pool = Pool(self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler, spawn=pool)
+        #server = StreamServer(('0.0.0.0',BGP_TCP_PORT), self.handler, spawn=pool)
+
+        #listen ipv4 and ipv6 connection
+        listener = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        listener.bind(('::',BGP_TCP_PORT,0,0))
+        listener.listen(self.conn_num)
+        server = StreamServer(listener, self.handler, spawn=pool)
 
         print "Starting server..."
         server.serve_forever()
@@ -67,13 +74,16 @@ class Connection(object):
         self.send_q = Queue(1)
 
         # data structures for BGP
+        self.local_ip = None
+        self.local_as = None
+        self.local_id = None
+        self.local_capabilites = []
         self.peer_ip = None
         self.peer_as = None
         self.peer_id = None
         self.peer_capabilities = []
-        self._4or6 = 0
+        self._4or6 = 4
         self.hold_time = 240
-        self.route_table = []
     
     def close(self):
         print "close the connect from", self.address
@@ -123,54 +133,33 @@ class Connection(object):
         else:
             print 'receive unknown msg_type', msg_type
 
-    def __check_capabilities(self, peer_capabilities):
-        """
-            1) checks if some important capabilities are supported by peer
-               return True if OK
-            2) assigns self.capabilities, which is the actual capabilities
-               used in this connection
-        """
-        # XXX
-        return True
-
     def _handle_open(self,msg):
 
-        open_msg = msg.data
-        self.peer_as = open_msg.my_as
-        peer_holdtime = open_msg.hold_time
-        self.hold_time = min(peer_holdtime, self.hold_time)
-        self.peer_id = open_msg.bgp_identifier
-        self.peer_capabilities = open_msg.data
-        for capability in self.peer_capabilities:
-            if isinstance(capability, BGP4.multi_protocol_extension):
-                if capability.addr_family == 1:
-                    self._4or6 = 4
-                elif capability.addr_family == 2:
-                    self._4or6 = 6
-                else:
-                    self._4or6 = 0
+        #print type(msg),msg.__dict__,msg.data.__dict__
 
-        print '4/6:', self._4or6
-        print 'peer_as:', self.peer_as
-        print 'hold_time:', self.hold_time
-        print 'peer_id:', convert.ipv4_to_str(self.peer_id)
-        print 'capability:', self.peer_capabilities
-
-        # send OPEN to peer
-        open_reply = BGP4.bgp4_open(version = 4,my_as = Server.local_as,
-                            hold_time = self.hold_time,
-                            bgp_identifier = Server.local_ip,
-                            data = Server.capabilities)
-        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_OPEN, data = open_reply)
+        #if self.send_thr != None:
+        hdr = bytearray()
+        cp_ad = []
+        cp_ad.append(BGP4.multi_protocol_extension(code = 1,length = 4,
+                    addr_family = 1,res = 0x00, sub_addr_family = 1))
+        cp_ad.append(BGP4.route_refresh(2,0))
+        cp_ad.append(BGP4.support_4_octets_as_num(65,4,64496))
+        open_reply = BGP4.bgp4_open(4,64496,240,'10.109.242.115',0,2,0,cp_ad)
+        bgp4_reply = BGP4.bgp4(1,0,1,open_reply)
         p = packet.Packet()
         p.add_protocol(bgp4_reply)
         p.serialize()
+
+        #print bgp4_reply.marker
+        #print BGP4.bgp4.parser(buffer(p.data)).__dict__
+        #print type(p.data)
         self.send(p.data)
-        
-        if self.__check_capabilities(self.peer_capabilities):
-            self.send_keepalive_msg()
-        else:
-            self.send_notification_msg()
+        #print 'send open reply success!'
+        keepalive = BGP4.bgp4(1,0,4,None)
+        p = packet.Packet()
+        p.add_protocol(keepalive)
+        p.serialize()
+        self.send(p.data)
     
 
     def _handle_update(self, msg):
@@ -220,7 +209,12 @@ class Connection(object):
         print 'error code,sub error code',no.err_code,no.err_subcode         
 
     def _handle_keepalive(self,msg):
-        self.send_keepalive_msg()
+        bgp4_reply = BGP4.bgp4(1,0,4,None)
+        p = packet.Packet()
+        p.add_protocol(bgp4_reply)        
+        p.serialize()
+        self.send(p.data)
+
         
     @_deactivate
     def _send_loop(self):
@@ -235,9 +229,9 @@ class Connection(object):
         if self.send_q:
             self.send_q.put(buf)
 
-    def serve(self):
+    def serve(self):       
         send_thr = gevent.spawn(self._send_loop)
-       
+        
         try:
             self._recv_loop()
         finally:
@@ -250,23 +244,11 @@ class Connection(object):
     
     def send_open_msg(self):
         pass
-
-    def send_keepalive_msg(self):
-        keepalive = BGP4.bgp4(type_ = BGP4.BGP4_KEEPALIVE, data = None)
-        p = packet.Packet()
-        p.add_protocol(keepalive)
-        p.serialize()
-        self.send(p.data)
-
-    def send_notification_msg(self):
-        """
-            input: err_code, err_subcode, and data 
-            output: send msg
-        """
-        pass
-
+        
+'''
 if __name__ == '__main__':
     s = Server(10)
     g = Greenlet(s)
     g.start()
     g.join()
+'''
