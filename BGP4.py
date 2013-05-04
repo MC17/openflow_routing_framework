@@ -176,9 +176,32 @@ class bgp4_open(object):
         offset += cls._MIN_LEN
 
         bgp_identifier = convert.ipv4_to_str(bgp_identifier)
+        '''
+            There're two types of packet structure:
+            1)
+            Optional Parameters
+                Optional Parameter: Capability
+                    Capability 1
+                    capability 2
+                    ...
+                    Capability n
+            2)
+            Optional Parameters
+                Optional Parameter: Capability
+                    Capability 1
+                    ...
+                    Capability n
+                Optional Parameter: Capability
+                    Capability
+                ...
+                Optional Parameter: Capability
+                    Capability
+
+            The second one is obselete but should be supported,
+            as defined in RFC 5492
+        '''
         if opt_para_len >= 2:
             (type_, para_len) = struct.unpack_from('!BB', buf, offset)
-            offset += 2
             msg = cls(version, my_as, hold_time, bgp_identifier,
                       opt_para_len, type_, para_len)
         else:
@@ -189,12 +212,15 @@ class bgp4_open(object):
         msg.data = []
         buf = buffer(buf[offset:])
         while len(buf) > 0:
-            code, len_ = struct.unpack_from('!BB', buf)
-            cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
-            if cls_:
-                msg.data.append(cls_.parser(buf, 0))
-            offset += len_ + 2
-            buf = buffer(buf[len_+2:])
+            (type_, para_len) = struct.unpack_from('!BB', buf)
+            sub_buf = buffer(buf[2:para_len+2])
+            while len(sub_buf) > 0:
+                code, len_ = struct.unpack_from('!BB', sub_buf)
+                cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
+                if cls_:
+                    msg.data.append(cls_.parser(sub_buf, 0))
+                sub_buf = buffer(sub_buf[len_+2:])
+            buf = buffer(buf[para_len+2:])
 
         return msg
 
