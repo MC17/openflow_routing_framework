@@ -7,6 +7,7 @@ from ryu.lib.hub import StreamServer
 from eventlet.queue import Queue
 import eventlet
 import contextlib
+import greenlet
 import traceback
 
 from ryu.lib.packet import packet, ethernet
@@ -52,7 +53,7 @@ def _deactivate(method):
     def deactivate(self):
         try:
             method(self)
-        except eventlet.StopServe:
+        except greenlet.GreenletExit:
             pass
         except:
             traceback.print_exc()
