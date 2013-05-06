@@ -440,6 +440,7 @@ class bgp4_update(object):
                 path_attr_msg = cls_.parser(buf, offset)
                 msg.path_attr.append(path_attr_msg)
             offset += 2
+            len_ -= 2
             if (flag & 0x10) == 0x10:
                 (length,) = struct.unpack_from('!H', buf, offset)
                 offset += 2 + length
