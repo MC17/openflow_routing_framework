@@ -176,9 +176,32 @@ class bgp4_open(object):
         offset += cls._MIN_LEN
 
         bgp_identifier = convert.ipv4_to_str(bgp_identifier)
+        '''
+            There're two types of packet structure:
+            1)
+            Optional Parameters
+                Optional Parameter: Capability
+                    Capability 1
+                    capability 2
+                    ...
+                    Capability n
+            2)
+            Optional Parameters
+                Optional Parameter: Capability
+                    Capability 1
+                    ...
+                    Capability n
+                Optional Parameter: Capability
+                    Capability
+                ...
+                Optional Parameter: Capability
+                    Capability
+
+            The second one is obselete but should be supported,
+            as defined in RFC 5492
+        '''
         if opt_para_len >= 2:
             (type_, para_len) = struct.unpack_from('!BB', buf, offset)
-            offset += 2
             msg = cls(version, my_as, hold_time, bgp_identifier,
                       opt_para_len, type_, para_len)
         else:
@@ -189,12 +212,15 @@ class bgp4_open(object):
         msg.data = []
         buf = buffer(buf[offset:])
         while len(buf) > 0:
-            code, len_ = struct.unpack_from('!BB', buf)
-            cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
-            if cls_:
-                msg.data.append(cls_.parser(buf, 0))
-            offset += len_ + 2
-            buf = buffer(buf[len_+2:])
+            (type_, para_len) = struct.unpack_from('!BB', buf)
+            sub_buf = buffer(buf[2:para_len+2])
+            while len(sub_buf) > 0:
+                code, len_ = struct.unpack_from('!BB', sub_buf)
+                cls_ = cls._CAPABILITY_ADVERTISEMENT.get(code, None)
+                if cls_:
+                    msg.data.append(cls_.parser(sub_buf, 0))
+                sub_buf = buffer(sub_buf[len_+2:])
+            buf = buffer(buf[para_len+2:])
 
         return msg
 
@@ -693,9 +719,9 @@ class mp_reach_nlri(object):
         
     """
 
-    def __init__(self, flag, code, length, addr_family, sub_addr_family, next_hop_len=0, next_hop=None, num_of_snpas=0,
+    def __init__(self, flag, code, length, addr_family, sub_addr_family, next_hop_len=0, next_hop=[], num_of_snpas=0,
                  snpas=[], nlri=[]):
-        #flag = 0x90, code = bgp4_update._MP_REACH_NLRI
+        #flag = 0x80, code = bgp4_update._MP_REACH_NLRI
         self.flag = flag
         self.code = code
         self.length = length
@@ -733,13 +759,19 @@ class mp_reach_nlri(object):
             (addr_family, sub_addr_family, next_hop_len) = struct.unpack_from('!HBB', buf, offset)
             offset += 4
 
-        next_hop = None
-        if next_hop_len != 0:
-            #next_hop_len == 4(ipv4) or 16(ipv6) 
-            (next_hop,) = struct.unpack_from('!%is' % next_hop_len, buf, offset)
-            offset += next_hop_len
+        next_hop = []
+        if next_hop_len == 4:
+            (temp_next_hop,) = struct.unpack_from('!I', buf, offset)
+            offset += 4
+            next_hop.append(convert.ipv4_to_str(temp_next_hop))
+        else:
+            if next_hop_len/16 != 0:
+                for i in range(next_hop_len/16):
+                    (temp_next_hop,) = struct.unpack_from('!16s', buf, offset)
+                    offset += 16
+                    next_hop.append(convert.bin_to_ipv6(temp_next_hop))
 
-        if offset < len(buf):
+        if len(buf) > offset:
             (num_of_snpas,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             snaps = []
@@ -747,27 +779,43 @@ class mp_reach_nlri(object):
                 for i in range(num_of_snpas):
                     (len_of_snap,) = struct.unpack_from('!B', buf, offset)
                     offset += 1
-                    snaps.append(len_of_snap)
                     (snap,) = struct.unpack_from('!%is' % len_of_snap, buf, offset)
                     offset += len_of_snap
-                    snaps.append(snap)
-
-        nlri = []
-        while offset < len(buf):
+                    snaps.append((len_of_snap,snap))
+      
+        nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)       
+        while len(buf) > offset:
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
-            nlri.append(len_nlri)
+
             a = len_nlri / 8
-            b = len_nlri % 8
+            if len_nlri % 8 != 0:
+                a += 1   # aB
+            
+            (ip_str,) = struct.unpack_from('!%is'%a, buf, offset)  # e.g (192,168,8,)
+            
+            temp_list = []  # need to append 0            
+            if addr_family == 1: #ipv4
+                if a < 4:
+                    #pad ip_str to a complete ipv4 address
+                    while len(temp_list) < (4 - a):
+                        temp_list.append(0)
+                    ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
+                ip_int = stuct.unpack('!I',ip_str)
+                ip_nlri = convert.ipv4_to_str(ip_int)
 
-            if b != 0:
-                a += 1
-                b = 8 - b
-            para_nlri = struct.unpack_from('!%is' % a, buf, offset)
-            para_nlri >>= b
+            elif addr_family == 2: #ipv6
+                if a < 16:
+                    while len(temp_list) < (16 - a):
+                        temp_list.append(0)
+                    ip_str += bytearray(struct.pack('!%iB'%(16-a),*temp_list))                
+                ip_nlri = convert.bin_to_ipv6(ip_str)
+            
+            print '** mp_reach_nlri ip,prefix', ip_nlri, len_nlri 
+            _tuple = (len_nlri,ip_nlri)
+            nlri.add(_tuple)
             offset += a
-            nlri.append(para_nlri)
-
+            
         msg = cls(flag, code, length, addr_family, sub_addr_family, next_hop_len, next_hop,
                   num_of_snpas, snaps, nlri)
         return msg
@@ -778,36 +826,55 @@ class mp_reach_nlri(object):
                                     self.sub_addr_family))
         self.length = 3
         if self.next_hop_len == 4:
-            hdr += bytearray(struct.pack('!BI', self.next_hop_len, self.next_hop))
+            hdr += bytearray(struct.pack('!BI', self.next_hop_len, convert.ipv4_to_int(self.next_hop)))
             self.length += 4 + 1
-        elif self.next_hop_len == 16:
-            hdr += bytearray(struct.pack('!B16s', self.next_hop_len, self.next_hop))
-            self.length += 16 + 1
+        elif self.next_hop_len/16 !=0:
+            hdr += bytearray(struct.pack('!B', self.next_hop_len))
+            self.length += 1
+            for i in range(self.next_hop_len/16):
+                hdr += bytearray(struct.pack('!8H',*convert.ipv6_to_arg_list(self.next_hop[i])))
+                self.length += 16
         elif self.next_hop_len == 0:
             hdr += bytearray(struct.pack('!B', self.next_hop_len))
             self.length += 1
 
+        #snaps [(len_of_snap,snap),(),]
         hdr += bytearray(struct.pack('!B', self.num_of_snpas))
         if self.num_of_snpas != 0:
             for i in range(self.num_of_snpas):
-                len_of_snap = self.snaps[2 * i]
+                len_of_snap = self.snaps[i][0]
                 if len_of_snap != 0:
-                    hdr += bytearray(struct.pack('!B%is' % len_of_snap, self.snaps[2 * i], self.snaps[2 * i + 1]))
+                    hdr += bytearray(struct.pack('!B%is' % len_of_snap, self.snaps[i][0], self.snaps[i][1]))
                 else:
-                    hdr += bytearray(struct.pack('!B', self.snaps[2 * i]))
+                    hdr += bytearray(struct.pack('!B', self.snaps[i][0]))
                 self.length += len_of_snap + 1
+        
+        #nlri
+        if len(self.nlri) != 0:
+            for prefix, ip in self.nlri:
+                a = prefix/8
+                if 0 != prefix%8:
+                    a += 1
+                if self.addr_family == 1:
+                    #ip_int = convert.ipv4_to_int(ip)
+                    #ip_list = convert.ipv4_to_list(ip_int, prefix)
+                    #b = len(ip_list) * 'B'
+                    #hdr += bytearray(struct.pack('!B%s' % b, prefix, *ip_list))
+                    ip_int = convert.ipv4_to_int(ip)
+                    ip_str = struct.pack('!I',ip_int)
+                    if a != 4:
+                        ip_str = ip_str[0:a]
 
-        for i in range(len(self.nlri) / 2):
-            len_nlri = self.nlri[2 * i]
-            a = len_nlri / 8
-            b = len_nlri % 8
-            if b != 0:
-                a += 1
-                self.nlri[2 * i + 1] <<= (8 - b)
-                hdr += bytearray(struct.pack('!B%is' % a, self.nlri[2 * i], self.nlri[2 * i + 1]))
-            elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B', self.nlri[2 * i]))
-            self.length += a + 1
+                elif self.addr_family == 2:                    
+                    ip_str = struct.pack('!8H',*convert.ipv6_to_arg_list(ip))
+                    if a != 16:
+                        ip_str = ip_str[0:a]
+                
+                hdr += bytearray(struct.pack('B%is'%a, prefix, ip_str))
+
+           
+        print '## mp_reach_nlri serialize nlri success'
+        return hdr
 
         if self._PACK_STR == '!BBH':
             struct.pack_into('!H', hdr, 2, self.length)
