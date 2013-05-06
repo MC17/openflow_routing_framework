@@ -365,9 +365,17 @@ class support_4_octets_as_num(object):
 
 
 class NLRI(object):
-    def __init__(self, length, prefix):
+    def __init__(self, length, prefix, _4or6 = 4):
         self.length = length
         self.prefix = prefix
+        self._4or6 = _4or6
+    def __str__(self):
+        if _4or6 == 4:
+            return '<NLRI prefix length = %s, prefix = %s>' %
+                   (self.length, convert.ipv4_to_str(self.prefix))
+        else:
+            return '<NLRI prefix length = %s, prefix = %s>' %
+                   (self.length, convert.bin_to_ipv6(self.prefix))
 
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
