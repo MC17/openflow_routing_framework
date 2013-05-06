@@ -1,6 +1,7 @@
 
 import xml.etree.ElementTree as ET
 from gateway import Gateway
+from ConfigParser import ConfigParser,ParsingError
 
 
 """
@@ -133,6 +134,21 @@ def handle_port(port):
     gw = Gateway(**kwargs)
     return gw
 
+def read_bgp_config(filepath):
+    dict_ = {}
+    config = ConfigParser()
+    try:
+        config.read(filepath)
+        section = 'bgper'
+        options = config.options(section)
+        for option in options:
+            dict_[option] = config.get(section, option)
+    except IOError as e:
+        print "I/O error({0}):{1}".formate(e.errno,e.strerror)
+    except ParsingError as e:
+        print e
+    return dict_
+
 if __name__ == '__main__':
     filepath = 'config.xml'
     switches_cfg = read_cfg(filepath)
@@ -142,4 +158,8 @@ if __name__ == '__main__':
     if s1:
         port1 = s1.get('1') # s1[port_no] = Gateway
         print port1
+    filepath = 'bgper.config'
+    d = read_bgp_config(filepath)
+    if d:
+        print d
 

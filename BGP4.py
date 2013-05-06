@@ -364,6 +364,20 @@ class support_4_octets_as_num(object):
         return hdr
 
 
+class NLRI(object):
+    def __init__(self, length, prefix, _4or6 = 4):
+        self.length = length
+        self.prefix = prefix
+        self._4or6 = _4or6
+    def __str__(self):
+        if self._4or6 == 4:
+            return '<NLRI prefix length = %s, prefix = %s>' % \
+                   (self.length, convert.ipv4_to_str(self.prefix))
+        else:
+            return '<NLRI prefix length = %s, prefix = %s>' % \
+                   (self.length, convert.bin_to_ipv6(self.prefix))
+
+
 @bgp4.register_bgp4_type(BGP4_UPDATE)
 class bgp4_update(object):
     """
@@ -433,27 +447,18 @@ class bgp4_update(object):
             if cls_:
                 path_attr_msg = cls_.parser(buf, offset)
                 msg.path_attr.append(path_attr_msg)
-                len_ -= cls_._MIN_LEN
-                offset += cls_._MIN_LEN
-
-                if path_attr_msg.__dict__.has_key('length'):
-                    len_ -= path_attr_msg.length
-                    offset += path_attr_msg.length
-            else:
-                # skip the atttribute we don't defined 
-                offset += 2
-                if (flag & 0x10) == 0x10:
-                    (length,) = struct.unpack_from('!H', buf, offset)
-                    offset += 2 + length
-                    len_ -= 2 + length
-                elif (flag & 0x10) == 0:
-                    (length,) = struct.unpack_from('!B', buf, offset)
-                    offset += 1 + length
-                    len_ -= 1 + length
-                else:
-                    print '** here'
+            offset += 2
+            len_ -= 2
+            if (flag & 0x10) == 0x10:
+                (length,) = struct.unpack_from('!H', buf, offset)
+                offset += 2 + length
+                len_ -= 2 + length
+            elif (flag & 0x10) == 0:
+                (length,) = struct.unpack_from('!B', buf, offset)
+                offset += 1 + length
+                len_ -= 1 + length
            
-        nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)
+        nlri = []
         nlri_len = 0
         while len(buf) > offset:
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
@@ -461,16 +466,16 @@ class bgp4_update(object):
 
             a = len_nlri / 8
             if len_nlri % 8 != 0:
-                a += 1   # aB
-            b = a*'B'
-            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)  # e.g (192,168,8,)
+                a += 1
+            b = a * 'B'
+            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)# e.g (192,168,8,)
             temp_list = list(ip_tuple)  # need to append 0
             while len(temp_list) < 4:
                 temp_list.append(0)
             ip_nlri = convert.ipNum(*temp_list)  # ip int
             print '** nlri ip,prefix', convert.ipv4_to_str(ip_nlri), len_nlri
-            _tuple = (len_nlri, ip_nlri)
-            nlri.add(_tuple)
+            nlri_entry = NLRI(len_nlri, ip_nlri)
+            nlri.append(nlri_entry)
             offset += a
             nlri_len += 1 + a
         update_total_len = 23 + path_attr_len + wd_rout_len + nlri_len
@@ -567,7 +572,6 @@ class as_path(object):
 
     """
 
-    # TODO need to modify by referring to rfc4271,4.3
     def __init__(self,flag, code, length, as_type, as_len, as_values =[]):
         #flag = 0x80, length = 0,code = bgp4_update._AS_PATH
         self.flag = flag
@@ -883,11 +887,6 @@ class mp_reach_nlri(object):
 
         return hdr
 
-
-class NLRI(object):
-    def __init__(self, length, prefix):
-        self.length = length
-        self.prefix = prefix
 
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MP_UNREACH_NLRI)

@@ -10,6 +10,7 @@ import dest_event
 import convert
 from bgp_server import Server, Connection
 import BGP4
+from util import read_bgp_config
 
 
 class BGPer(app_manager.RyuApp):
@@ -22,10 +23,16 @@ class BGPer(app_manager.RyuApp):
         super(BGPer, self).__init__(*args, **kwargs)
         self.name = 'bgper'
 
-        # XXX should read from config file
-        Server.local_ip4 = '10.109.242.115'
-        Server.local_ip6 = '2001:da8:215:8f2:62eb:69ff:fe0c:bdcf'
-        Server.local_as = 64496
+        self.filepath = 'bgper.config'
+        self.bgp_cfg = None
+        try:
+            self.bgp_cfg = read_bgp_config(self.filepath)
+            #print self.bgp_cfg
+        except:
+            print "File %s Parse Error" % self.filepath
+
+        Server.local_ip = self.bgp_cfg.get('local_ip')
+        Server.local_as = int(self.bgp_cfg.get('local_as'))
         Server.capabilities = []
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
                             length = 4, addr_family = 1,res = 0x00,
