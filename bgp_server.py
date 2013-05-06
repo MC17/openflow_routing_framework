@@ -33,18 +33,7 @@ class Server(object):
         self.server_loop()
 
     def server_loop(self):
-
         
-        #listen ipv4 and ipv6 connection
-        #listener = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        #listener.bind(('::',BGP_TCP_PORT,0,0))
-        #listener.listen(self.conn_num)
-        #server = StreamServer(listener, self.handler)
-<<<<<<< HEAD
-
-=======
-        
->>>>>>> 1910915ab3efdf2b4883d347dcb9dd673a5d95ca
         # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
         listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
         server = StreamServer(listen_info, self.handler)
@@ -185,10 +174,14 @@ class Connection(object):
     
 
     def _handle_update(self, msg):
-<<<<<<< HEAD
-
-        #print '---------parse update packet'
-        #msg.data.
+        
+        
+        print '----UPDATE----'
+        update_msg = msg.data
+        print update_msg.wd_rout
+        print update_msg.path_attr
+        print update_msg.nlri
+        print update_msg.total_len
         
         print '---------start send update test'
 
@@ -210,46 +203,8 @@ class Connection(object):
             p.add_protocol(bgp4_reply)
             p.serialize()
             self.send(p.data)
-
-        
-        
-
-        '''
-        #path_attr
-        #origin should be IGP,because they are connected directly
-        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 0)
-        as_value = [100]
-        as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
-        as_path length will calculate auto in serialize  4B/per as
-        next_hop_ip = '10.109.242.57'
-        next_hop_msg = BGP4.next_hop(0x40, BGP4.bgp4_update._NEXT_HOP, 4, next_hop_ip)
-        path_attr = [origin_msg, as_path_msg, next_hop_msg]
-
-        # nlri 
-        nlri = set()
-        local_ip = (24,convert.ipv4_to_int('192.168.56.101')) # (prefix,ip)
-        nlri.add(local_ip)
-
-        update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
-        # path_attr_len will calculate automatic in serialize 
-        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
-        p = packet.Packet()
-        p.add_protocol(bgp4_reply)
-        p.serialize()
-        #self.send(p.data)
-        '''
-
-        #print '---------send update test success'
-=======
-        print '----UPDATE----'
-        update_msg = msg.data
-        print update_msg.wd_rout
-        print update_msg.path_attr
-        print update_msg.nlri
-        print update_msg.total_len
->>>>>>> 1910915ab3efdf2b4883d347dcb9dd673a5d95ca
-        
-        
+            
+        print '---------send update test success'
 
     def _handle_notification(self, msg):
         """
