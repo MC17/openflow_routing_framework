@@ -40,11 +40,10 @@ class Server(object):
         #listener.bind(('::',BGP_TCP_PORT,0,0))
         #listener.listen(self.conn_num)
         #server = StreamServer(listener, self.handler)
-        #addr = ('0.0.0.0', BGP_TCP_PORT)
-        #listen_info = (('0.0.0.0', BGP_TCP_PORT), socket.AF_INET, self.conn_num)
-
-        listen_info = ('0.0.0.0', BGP_TCP_PORT)
-        server = StreamServer( listen_info, self.handler)
+        
+        # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
+        listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
+        server = StreamServer(listen_info, self.handler)
 
         print "Starting server..."
         server.serve_forever()
