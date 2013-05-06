@@ -567,7 +567,6 @@ class as_path(object):
 
     """
 
-    # TODO need to modify by referring to rfc4271,4.3
     def __init__(self,flag, code, length, as_type, as_len, as_values =[]):
         #flag = 0x80, length = 0,code = bgp4_update._AS_PATH
         self.flag = flag
