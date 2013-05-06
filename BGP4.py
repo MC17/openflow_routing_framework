@@ -844,6 +844,7 @@ class mp_reach_nlri(object):
 
         #snaps [(len_of_snap,snap),(),]
         hdr += bytearray(struct.pack('!B', self.num_of_snpas))
+        self.length += 1
         if self.num_of_snpas != 0:
             for i in range(self.num_of_snpas):
                 len_of_snap = self.snaps[i][0]
