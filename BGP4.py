@@ -371,10 +371,10 @@ class NLRI(object):
         self._4or6 = _4or6
     def __str__(self):
         if _4or6 == 4:
-            return '<NLRI prefix length = %s, prefix = %s>' %
+            return '<NLRI prefix length = %s, prefix = %s>' % \
                    (self.length, convert.ipv4_to_str(self.prefix))
         else:
-            return '<NLRI prefix length = %s, prefix = %s>' %
+            return '<NLRI prefix length = %s, prefix = %s>' % \
                    (self.length, convert.bin_to_ipv6(self.prefix))
 
 
