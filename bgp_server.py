@@ -42,7 +42,8 @@ class Server(object):
         #server = StreamServer(listener, self.handler)
         
         # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
-        listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
+        #listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
+        listen_info = ('0.0.0.0', BGP_TCP_PORT)
         server = StreamServer(listen_info, self.handler)
 
         print "Starting server..."
@@ -181,34 +182,14 @@ class Connection(object):
     
 
     def _handle_update(self, msg):
-
-        
-        #send update for test
-
-        print '---------start send update test'
-        #path_attr
-        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
-        as_value = [100]
-        as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
-        # as_path length will calculate auto in serialize  4B/per as
-        next_hop_ip = '10.109.242.57'
-        next_hop_msg = BGP4.next_hop(0x40, BGP4.bgp4_update._NEXT_HOP, 4, next_hop_ip)
-        path_attr = [origin_msg, as_path_msg, next_hop_msg]
-
-        # nlri 
-        nlri = set()
-        local_ip = (24,convert.ipv4_to_int('192.168.56.101')) # (prefix,ip)
-        nlri.add(local_ip)
-
-        update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
-        # path_attr_len will calculate automatic in serialize 
-        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
-        p = packet.Packet()
-        p.add_protocol(bgp4_reply)
-        p.serialize()
-        #self.send(p.data)
-
-        print '---------send update test success'
+        print '----UPDATE----'
+        print msg
+        print msg.wd_rout_len
+        print msg.wd_rout
+        print msg.path_attr_len
+        print msg.path_attr
+        print msg.nlri
+        print msg.total_len
         
         
 
@@ -269,5 +250,43 @@ class Connection(object):
         """
             input: err_code, err_subcode, and data 
             output: send msg
+        """
+        pass
+
+    def send_current_route_table(self):
+        """
+            used after OPEN to send current route_table to peer
+        """
+        #send update for test
+
+        print '---------start send update test'
+        #path_attr
+        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
+        as_value = [100]
+        as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
+        # as_path length will calculate auto in serialize  4B/per as
+        next_hop_ip = '10.109.242.57'
+        next_hop_msg = BGP4.next_hop(0x40, BGP4.bgp4_update._NEXT_HOP, 4, next_hop_ip)
+        path_attr = [origin_msg, as_path_msg, next_hop_msg]
+
+        # nlri 
+        nlri = set()
+        local_ip = (24,convert.ipv4_to_int('192.168.56.101')) # (prefix,ip)
+        nlri.add(local_ip)
+
+        update_reply = BGP4.bgp4_update(0, [], 0, path_attr, nlri) 
+        # path_attr_len will calculate automatic in serialize 
+        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
+        p = packet.Packet()
+        p.add_protocol(bgp4_reply)
+        p.serialize()
+        #self.send(p.data)
+
+        print '---------send update test success'
+        pass
+
+    def send_update_msg(self):
+        """
+            convenient method to send update message
         """
         pass
