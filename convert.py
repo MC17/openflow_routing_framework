@@ -39,7 +39,6 @@ def ipNum(w, x, y, z):
        returns: w << 24 | x << 16 | y << 8 | z"""
     return (w << 24) | (x << 16) | (y << 8) | z
 
-
 # ip eg '192.168.1.1'
 def ipv4_to_int(ip):
     "Parse an IP address and return an unsigned int."
@@ -112,6 +111,14 @@ def bin_to_ipv4_prefix(bin):
 
 IPV6_PACK_STR = '!8H'
 
+
+def ipv6_16_arg_list_to_str(arg_list):
+    assert isinstance(arg_list,list)
+    assert len(arg_list) == 16
+    ipv6_arg_list = []
+    for i in xrange(8):
+        ipv6_arg_list.append((arg_list[2*i]<<8) + (arg_list[2*i+1]))
+    return ipv6_arg_list_to_str(ipv6_arg_list)
 
 def ipv6_to_arg_list(ipv6):
     '''

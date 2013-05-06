@@ -23,7 +23,8 @@ class BGPer(app_manager.RyuApp):
         self.name = 'bgper'
 
         # XXX should read from config file
-        Server.local_ip = '10.109.242.118'
+        Server.local_ip4 = '10.109.242.115'
+        Server.local_ip6 = '2001:da8:215:8f2:62eb:69ff:fe0c:bdcf'
         Server.local_as = 64496
         Server.capabilities = []
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
@@ -35,6 +36,10 @@ class BGPer(app_manager.RyuApp):
         Server.capabilities.append(BGP4.route_refresh(2,0))
         Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
                                                         Server.local_as))
+
+        #we also need to defined a ipv4 route table and a ipv6 route table
+        #they may be in the form of 'target_network,prefix,next_jump'
+
 
         server = Server(handler)
         g = hub.spawn(server)

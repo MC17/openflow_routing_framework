@@ -7,6 +7,7 @@ from ryu.lib.hub import StreamServer
 from eventlet.queue import Queue
 import eventlet
 import contextlib
+import greenlet
 import traceback
 
 from ryu.lib.packet import packet, ethernet
@@ -22,7 +23,7 @@ BGP4_HEADER_SIZE = BGP4.bgp4.BGP4_HEADER_SIZE
 
 
 class Server(object):
-    
+
     def __init__(self, handler, conn_num = 128, *args, **kwargs):
         super(Server, self).__init__()
         self.conn_num = conn_num
@@ -39,11 +40,10 @@ class Server(object):
         #listener.bind(('::',BGP_TCP_PORT,0,0))
         #listener.listen(self.conn_num)
         #server = StreamServer(listener, self.handler)
-        #addr = ('0.0.0.0', BGP_TCP_PORT)
-        #listen_info = (('0.0.0.0', BGP_TCP_PORT), socket.AF_INET, self.conn_num)
 
-        listen_info = ('0.0.0.0', BGP_TCP_PORT)
-        server = StreamServer( listen_info, self.handler)
+        # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
+        listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
+        server = StreamServer(listen_info, self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -52,7 +52,7 @@ def _deactivate(method):
     def deactivate(self):
         try:
             method(self)
-        except eventlet.StopServe:
+        except greenlet.GreenletExit:
             pass
         except:
             traceback.print_exc()
@@ -166,7 +166,7 @@ class Connection(object):
         # send OPEN to peer
         open_reply = BGP4.bgp4_open(version = 4,my_as = Server.local_as,
                             hold_time = self.hold_time,
-                            bgp_identifier = Server.local_ip,
+                            bgp_identifier = Server.local_ip4,
                             data = Server.capabilities)
         bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_OPEN, data = open_reply)
         p = packet.Packet()
@@ -182,15 +182,40 @@ class Connection(object):
 
     def _handle_update(self, msg):
 
+        #print '---------parse update packet'
+        #msg.data.
         
-        #send update for test
-
         print '---------start send update test'
+
+        if self._4or6 == 4:
+            pass
+        elif self._4or6 == 6:
+            origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
+            as_value = [Server.local_as]
+            as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
+
+            nlri = set()
+            local_ip = (64,Server.local_ip6) # (prefix,ip)
+            nlri.add(local_ip)
+            mp_reach_nlri = BGP4.mp_reach_nlri(0x80,BGP4.bgp4_update._MP_REACH_NLRI,0,2,1,16,[Server.local_ip6],0,[],nlri)
+            path_attr = [origin_msg, as_path_msg, mp_reach_nlri]
+            update_reply = BGP4.bgp4_update(0, [], 0, path_attr, []) 
+            bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
+            p = packet.Packet()
+            p.add_protocol(bgp4_reply)
+            p.serialize()
+            self.send(p.data)
+
+        
+        
+
+        '''
         #path_attr
-        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
+        #origin should be IGP,because they are connected directly
+        origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 0)
         as_value = [100]
         as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
-        # as_path length will calculate auto in serialize  4B/per as
+        as_path length will calculate auto in serialize  4B/per as
         next_hop_ip = '10.109.242.57'
         next_hop_msg = BGP4.next_hop(0x40, BGP4.bgp4_update._NEXT_HOP, 4, next_hop_ip)
         path_attr = [origin_msg, as_path_msg, next_hop_msg]
@@ -207,8 +232,9 @@ class Connection(object):
         p.add_protocol(bgp4_reply)
         p.serialize()
         #self.send(p.data)
+        '''
 
-        print '---------send update test success'
+        #print '---------send update test success'
         
         
 
