@@ -990,7 +990,7 @@ class mp_unreach_nlri(object):
 
     def __init__(self, flag, code, length, addr_family,
                  sub_addr_family, wd_routes = []):
-        #flag = 0x90,code = bgp4_update._MP_UNREACH_NLRI
+        #flag = 0x80,code = bgp4_update._MP_UNREACH_NLRI
         self.flag = flag
         self.code = code
         self.length = length
@@ -999,11 +999,11 @@ class mp_unreach_nlri(object):
         self.wd_routes = wd_routes
 
         if ((flag & 0x10) == 0x10):
-            _PACK_STR = '!BBH'
-            _MIN_LEN = struct.calcsize(_PACK_STR)
+            self._PACK_STR = '!BBH'
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
-            _PACK_STR = '!BBB'
-            _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
+            self._PACK_STR = '!BBB'
+            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
@@ -1017,22 +1017,34 @@ class mp_unreach_nlri(object):
             cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR)
 
         (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR + 'BB', buf, offset)
-        offset += cls._MIN_LEN
+        offset += cls._MIN_LEN + 3
         msg = cls(flag, code, length, addr_family, sub_addr_family)
         len_ = length
-        len_ -= 2
-        if len_ > 0:
-            (len_wd_route,) = struct.unpack_from('!B', buf, offset)
+        len_ -= 3
+        #only support ipv6
+        msg.wd_routes = []
+        while len_ > 0:
+            (wd_len,) = struct.unpack_from('!B', buf, offset)
             offset += 1
-            msg.wd_routes.append(len_wd_route)
-            a = len_wd_route / 8
-            b = len_wd_route % 8
-            if b != 0:
+            len_ -= 1
+            a = wd_len/8
+            if 0 != wd_len%8:
                 a += 1
-            wd_route = struct.unpack_from('!%is' % a, buf, offset)
-            offset += a
-            withdraw_nlri = NLRI(len_wd_route, wd_route)
-            msg.wd_routes.append(withdraw_nlri)
+            if a == 0:
+                wd_route = '::'                    
+            else:
+                (wd_temp_route,) = struct.unpack_from('%is'%a, buf, offset)
+                offset += a
+                len_ -= a
+                if a < 16:
+                    temp_list = []
+                    while len(temp_list) < 16 - a:
+                        temp_list.append(0)
+                    wd_temp_route += bytearray(struct.pack('%iB'%(16 - a),*temp_list))
+                wd_route = convert.bin_to_ipv6(wd_temp_route)
+                print '######mp_unreach_nlri:',wd_route,wd_len
+            _tuple = (wd_len, wd_route)
+            msg.wd_routes.append(_tuple)
         return msg
 
     def serialize(self):
@@ -1041,22 +1053,28 @@ class mp_unreach_nlri(object):
                                     self.sub_addr_family))
         self.length = 3
 
-        for i in range(len(self.wd_routes) / 2):
-            len_wd_route = self.wd_routes[2 * i]
-            a = len_wd_route / 8
-            b = len_wd_route % 8
-            if b != 0:
-                a += 1
-                self.wd_routes[2 * i + 1] <<= (8 - b)
-                hdr += bytearray(struct.pack('!B%is' % a, self.wd_routes[2 * i], self.wd_routes[2 * i + 1]))
-            elif a == 0 and b == 0:
-                hdr += bytearray(struct.pack('!B', self.wd_routes[2 * i]))
-            self.length += a + 1
+        #serialise wd_routes        
+        if self.wd_routes != []:
+            len_ = 0
+            for wd_len,wd_route in self.wd_routes:
+                hdr += bytearray(struct.pack('!B', wd_len))
+                len_ += 1
+                if wd_len != 0:                   
+                    wd_route_str = bytearray(convert.ipv6_to_bin(wd_route))
+                    a = wd_len/8
+                    if 0 != wd_len%8:
+                        a += 1
+                    if a < 16:
+                        wd_route_str = wd_route_str[0:a]
+                    hdr += wd_route_str
+                    len_ += a
+            self.length += len_
 
         if self._PACK_STR == '!BBH':
             struct.pack_into('!H', hdr, 2, self.length)
         else:
             struct.pack_into('!B', hdr, 2, self.length)
+        print '## mp_unreach_nlri serialize success'
         return hdr
 
 
