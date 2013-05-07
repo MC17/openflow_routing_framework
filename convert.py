@@ -1,5 +1,4 @@
 
-
 # follows are the convert method
 # welcome to complement if needed
 #
@@ -111,31 +110,30 @@ def bin_to_ipv4_prefix(bin):
 
 IPV6_PACK_STR = '!8H'
 
-
-def ipv6_16_arg_list_to_str(arg_list):
-    assert isinstance(arg_list,list)
-    assert len(arg_list) == 16
-    ipv6_arg_list = []
-    for i in xrange(8):
-        ipv6_arg_list.append((arg_list[2*i]<<8) + (arg_list[2*i+1]))
-    return ipv6_arg_list_to_str(ipv6_arg_list)
-
 def ipv6_to_arg_list(ipv6):
     '''
         convert ipv6 string to a list of 8 different parts
     '''
     args = []
-    if ipv6 == '::':
-        return [0, 0, 0, 0, 0, 0, 0, 0]
-
     if '::' in ipv6:
         h, t = ipv6.split('::')
-        h_list = [int(x, 16) for x in h.split(':')]
-        t_list = [int(x, 16) for x in t.split(':')]
-        args += h_list
-        zero = [0]
-        args += ((8 - len(h_list) - len(t_list)) * zero)
-        args += t_list
+        if h == '' and t == '':
+            return [0,0,0,0,0,0,0,0]
+        elif h == '':
+            t_list = [int(x, 16) for x in t.split(':')]
+            args += (8-len(t_list))*[0]
+            args += t_list            
+        elif t == '':
+            h_list = [int(x, 16) for x in h.split(':')]
+            args += h_list
+            args += (8-len(h_list))*[0]
+        else:
+            h_list = [int(x, 16) for x in h.split(':')]
+            t_list = [int(x, 16) for x in t.split(':')]
+            args += h_list
+            zero = [0]
+            args += ((8 - len(h_list) - len(t_list)) * zero)
+            args += t_list
     else:
         args = [int(x, 16) for x in ipv6.split(':')]
 
