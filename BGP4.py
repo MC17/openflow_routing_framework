@@ -499,7 +499,7 @@ class bgp4_update(object):
                 temp_list = []  # need to append 0
                 while len(temp_list) < 4 - a:
                     temp_list.append(0)
-                ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
+                ip_str += struct.pack('!%iB'%(4 - a),*temp_list)
             (ip_int,) = struct.unpack('!I',ip_str)
             ip_nlri = convert.ipv4_to_str(ip_int)
             print '** nlri ip,prefix', ip_nlri, len_nlri
@@ -796,11 +796,11 @@ class mp_reach_nlri(object):
         self.nlri = nlri
 
         if ((flag & 0x10) == 0x10):
-            _PACK_STR = '!BBH'
-            _MIN_LEN = struct.calcsize(_PACK_STR)
+            self._PACK_STR = '!BBH'
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
-            _PACK_STR = '!BBB'
-            _MIN_LEN = _MIN_LEN = struct.calcsize(_PACK_STR)
+            self._PACK_STR = '!BBB'
+            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):

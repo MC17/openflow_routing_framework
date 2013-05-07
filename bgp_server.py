@@ -35,8 +35,8 @@ class Server(object):
     def server_loop(self):
         
         # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
-        listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
-        server = StreamServer(listen_info, self.handler)
+        #listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
+        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -178,7 +178,7 @@ class Connection(object):
         
         print '----UPDATE----'
         update_msg = msg.data
-        print update_msg.wd_rout
+        print update_msg.wd_routes
         print update_msg.path_attr
         print update_msg.nlri
         print update_msg.total_len

@@ -31,7 +31,8 @@ class BGPer(app_manager.RyuApp):
         except:
             print "File %s Parse Error" % self.filepath
 
-        Server.local_ip = self.bgp_cfg.get('local_ip')
+        Server.local_ip4 = self.bgp_cfg.get('local_ip4')
+        Server.local_ip6 = self.bgp_cfg.get('local_ip6')
         Server.local_as = int(self.bgp_cfg.get('local_as'))
         Server.capabilities = []
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,

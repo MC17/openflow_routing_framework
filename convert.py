@@ -125,6 +125,9 @@ def ipv6_to_arg_list(ipv6):
         convert ipv6 string to a list of 8 different parts
     '''
     args = []
+    if ipv6 == '::':
+        return [0, 0, 0, 0, 0, 0, 0, 0]
+
     if '::' in ipv6:
         h, t = ipv6.split('::')
         h_list = [int(x, 16) for x in h.split(':')]
