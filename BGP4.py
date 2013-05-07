@@ -465,7 +465,6 @@ class bgp4_update(object):
         offset += 2
         msg = cls(wd_routes_len, wd_routes, path_attr_len, [], set())
         len_ = path_attr_len
-        print 'len_,offset',len_,offset
         while len_ > 0:
             (flag, code) = struct.unpack_from('!BB', buf, offset)
             cls_ = cls._PATH_ATTRIBUTES.get(code, None)
@@ -482,12 +481,10 @@ class bgp4_update(object):
                 (length,) = struct.unpack_from('!B', buf, offset)
                 offset += 1 + length
                 len_ -= 1 + length
-            print 'len_,offset',len_,offset
           
         nlri = []
         nlri_len = 0
         while len(buf) > offset:
-            print 'len(buf),offset',len(buf),offset
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
 
@@ -502,7 +499,6 @@ class bgp4_update(object):
                 ip_str += struct.pack('!%iB'%(4 - a),*temp_list)
             (ip_int,) = struct.unpack('!I',ip_str)
             ip_nlri = convert.ipv4_to_str(ip_int)
-            print '** nlri ip,prefix', ip_nlri, len_nlri
             nlri_entry = NLRI(len_nlri, ip_nlri)
             nlri.append(nlri_entry)
             offset += a
@@ -663,7 +659,6 @@ class as_path(object):
             (as_value,) = struct.unpack_from('!I', buf, offset)
             offset += 2
             as_values.append(as_value)
-        print '** as', as_values
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
 
@@ -708,7 +703,6 @@ class next_hop(object):
     def parser(cls, buf, offset):
         (flag, code, length, _int_next_hop) = struct.unpack_from(cls._PACK_STR + 'I', buf, offset)
         _next_hop = convert.ipv4_to_str(_int_next_hop)
-        print '** next_hop', _next_hop
         msg = cls(flag, code, length, _next_hop)
         return msg
 
@@ -820,7 +814,6 @@ class mp_reach_nlri(object):
             (addr_family, sub_addr_family, next_hop_len) = struct.unpack_from('!HBB', buf, offset)
             offset += 4
 
-        print '**next_hop_len',next_hop_len
         next_hop = []
         if next_hop_len == 4:
             (temp_next_hop,) = struct.unpack_from('!I', buf, offset)
@@ -832,7 +825,6 @@ class mp_reach_nlri(object):
                     (temp_next_hop,) = struct.unpack_from('!16s', buf, offset)
                     offset += 16
                     next_hop.append(convert.bin_to_ipv6(temp_next_hop))
-                    print '**mp_reach_nlri next_hop',convert.bin_to_ipv6(temp_next_hop)
 
         if len(buf) > offset:
             (num_of_snpas,) = struct.unpack_from('!B', buf, offset)
@@ -875,7 +867,6 @@ class mp_reach_nlri(object):
                     ip_str += struct.pack('!%iB'%(16-a),*temp_list)
                 ip_nlri = convert.bin_to_ipv6(ip_str)
             
-            print '** mp_reach_nlri ip,prefix', ip_nlri, len_nlri 
             _tuple = (len_nlri,ip_nlri)
             nlri.add(_tuple)
             offset += a
