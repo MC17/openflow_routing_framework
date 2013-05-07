@@ -872,7 +872,7 @@ class mp_reach_nlri(object):
                 if a < 16:
                     while len(temp_list) < (16 - a):
                         temp_list.append(0)
-                    ip_str += bytearray(struct.pack('!%iB'%(16-a),*temp_list))                
+                    ip_str += struct.pack('!%iB'%(16-a),*temp_list)
                 ip_nlri = convert.bin_to_ipv6(ip_str)
             
             print '** mp_reach_nlri ip,prefix', ip_nlri, len_nlri 
@@ -1040,7 +1040,7 @@ class mp_unreach_nlri(object):
                     temp_list = []
                     while len(temp_list) < 16 - a:
                         temp_list.append(0)
-                    wd_temp_route += bytearray(struct.pack('%iB'%(16 - a),*temp_list))
+                    wd_temp_route += struct.pack('%iB'%(16 - a),*temp_list)
                 wd_route = convert.bin_to_ipv6(wd_temp_route)
                 print '######mp_unreach_nlri:',wd_route,wd_len
             _tuple = (wd_len, wd_route)
