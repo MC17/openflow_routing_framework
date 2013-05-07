@@ -495,10 +495,11 @@ class bgp4_update(object):
             if len_nlri % 8 != 0:
                 a += 1
             (ip_str,) = struct.unpack_from('!%is'%a, buf, offset)# e.g (192,168,8,)
-            temp_list = []  # need to append 0
-            while len(temp_list) < 4 - a:
-                temp_list.append(0)
-            ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
+            if a < 4:
+                temp_list = []  # need to append 0
+                while len(temp_list) < 4 - a:
+                    temp_list.append(0)
+                ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
             (ip_int,) = struct.unpack('!I',ip_str)
             ip_nlri = convert.ipv4_to_str(ip_int)
             print '** nlri ip,prefix', ip_nlri, len_nlri
