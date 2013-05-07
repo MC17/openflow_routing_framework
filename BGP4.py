@@ -396,8 +396,8 @@ class bgp4_update(object):
     
     """
 
-    _PACK_STR = '!HH'
-    _MIN_LEN = struct.calcsize(_PACK_STR)
+    #_PACK_STR = '!HH'
+    #_MIN_LEN = struct.calcsize(_PACK_STR)
     _PATH_ATTRIBUTES = {}
 
     _ORIGIN = 1
@@ -418,10 +418,10 @@ class bgp4_update(object):
 
     # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
-    def __init__(self, wd_rout_len = 0, wd_rout = [], path_attr_len = 0,
+    def __init__(self, wd_routes_len = 0, wd_routes = [], path_attr_len = 0,
                  path_attr = [], nlri = set(), total_len = 0):
-        self.wd_rout_len = wd_rout_len
-        self.wd_rout = wd_rout
+        self.wd_routes_len = wd_routes_len
+        self.wd_routes = wd_routes
         self.path_attr_len = path_attr_len
         self.path_attr = path_attr
         self.nlri = nlri
@@ -431,16 +431,41 @@ class bgp4_update(object):
     @classmethod
     def parser(cls, buf, offset):
 
-        (wd_rout_len,) = struct.unpack_from('!H', buf, offset)
+        (wd_routes_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-        # we don't handle wd_rote here,just skip it
-        if wd_rout_len != 0:
-            offset += wd_rout_len
+        # wd_routes_len
+        wd_routes = []
+        if wd_routes_len != 0:            
+            len_ = wd_routes_len
+            while len_ > 0:
+                (wd_len,) = struct.unpack_from('!B', buf, offset)
+                offset += 1
+                len_ -= 1
+                a = wd_len/8
+                if 0 != wd_len%8:
+                    a += 1
+                if a == 0:
+                    wd_route = '0.0.0.0'                    
+                else:
+                    (wd_temp_route,) = struct.unpack_from('%is'%a, buf, offset)
+                    offset += a
+                    len_ -= a
+                    if a < 4:
+                        temp_list = []
+                        while len(temp_list) < 4 - a:
+                            temp_list.append(0)
+                        wd_temp_route += bytearray(struct.pack('%iB'%(4 - a),*temp_list))
+                        (wd_route_int,) = struct.unpack('!I', wd_temp_route)
+                        wd_route = convert.ipv4_to_str(wd_route_int)
+                _tuple = (wd_len, wd_route)
+                wd_routes.append(_tuple)
+        
+
         (path_attr_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-        msg = cls(wd_rout_len, [], path_attr_len, [], [])
+        msg = cls(wd_routes_len, wd_routes, path_attr_len, [], set())
         len_ = path_attr_len
-
+        print 'len_,offset',len_,offset
         while len_ > 0:
             (flag, code) = struct.unpack_from('!BB', buf, offset)
             cls_ = cls._PATH_ATTRIBUTES.get(code, None)
@@ -457,36 +482,61 @@ class bgp4_update(object):
                 (length,) = struct.unpack_from('!B', buf, offset)
                 offset += 1 + length
                 len_ -= 1 + length
-           
+            print 'len_,offset',len_,offset
+          
         nlri = []
         nlri_len = 0
         while len(buf) > offset:
+            print 'len(buf),offset',len(buf),offset
             (len_nlri,) = struct.unpack_from('!B', buf, offset)
             offset += 1
 
             a = len_nlri / 8
             if len_nlri % 8 != 0:
                 a += 1
-            b = a * 'B'
-            ip_tuple = struct.unpack_from('!%s'%b, buf, offset)# e.g (192,168,8,)
-            temp_list = list(ip_tuple)  # need to append 0
-            while len(temp_list) < 4:
+            (ip_str,) = struct.unpack_from('!%is'%a, buf, offset)# e.g (192,168,8,)
+            temp_list = []  # need to append 0
+            while len(temp_list) < 4 - a:
                 temp_list.append(0)
-            ip_nlri = convert.ipNum(*temp_list)  # ip int
-            print '** nlri ip,prefix', convert.ipv4_to_str(ip_nlri), len_nlri
+            ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
+            (ip_int,) = struct.unpack('!I',ip_str)
+            ip_nlri = convert.ipv4_to_str(ip_int)
+            print '** nlri ip,prefix', ip_nlri, len_nlri
             nlri_entry = NLRI(len_nlri, ip_nlri)
             nlri.append(nlri_entry)
             offset += a
             nlri_len += 1 + a
-        update_total_len = 23 + path_attr_len + wd_rout_len + nlri_len
+        update_total_len = 23 + path_attr_len + wd_routes_len + nlri_len
         msg.nlri = nlri
+
         msg.total_len = update_total_len
         return msg
 
-
     def serialize(self):
-        #serialise wd_route_len and path_attr_len first
-        hdr = bytearray(struct.pack(self._PACK_STR, self.wd_rout_len, self.path_attr_len))
+        #serialise wd_routes
+        hdr = bytearray(struct.pack('!H', self.wd_routes_len))
+        if 0 != self.wd_routes_len:
+            len_ = 0
+            for wd_len,wd_route in self.wd_routes:
+                hdr += bytearray(struct.pack('!B', wd_len))
+                len_ += 1
+                if wd_len != 0:
+                    wd_route_int = convert.ipv4_to_int(wd_route)
+                    wd_route_str = bytearray(struct.pack('!I',wd_route_int))
+                    a = wd_len/8
+                    if 0 != wd_len%8:
+                        a += 1
+                    if a < 4:
+                        wd_route_str = wd_route_str[0:a]
+                    hdr += wd_route_str
+                    len_ += a
+            if len_ != self.wd_routes_len:
+                self.wd_routes_len = len_
+                struct.pack_into('!H', hdr, 0, self.wd_routes_len)
+            print '## serialize wd_routes success!'
+
+        #path_attr
+        hdr += bytearray(struct.pack('!H', self.path_attr_len))
         if self.path_attr != []:
             for attr in self.path_attr:
                 cls = self._PATH_ATTRIBUTES.get(attr.code, None)
@@ -495,18 +545,24 @@ class bgp4_update(object):
                     self.path_attr_len += attr._MIN_LEN
                     if attr.__dict__.has_key('length'):
                         self.path_attr_len += attr.length
-            struct.pack_into('!H', hdr, 2, self.path_attr_len)
+            struct.pack_into('!H', hdr, 2 + self.wd_routes_len, self.path_attr_len)
         print '## serialize path_attr success'
 
         #nlri
-        nlri_len = 0
         if len(self.nlri) != 0:
             for prefix, ip in self.nlri:
-                ip_list = convert.ipv4_to_list(ip, prefix)
-                b = len(ip_list) * 'B'
-                hdr += bytearray(struct.pack('!B%s' % b, prefix, *ip_list))
-                nlri_len += 1 + len(ip_list)
-        print '## serialize nlri success'
+                a = prefix/8
+                if 0 != prefix%8:
+                    a += 1 
+
+                ip_int = convert.ipv4_to_int(ip)
+                ip_str = struct.pack('!I',ip_int)
+                if a != 4:
+                    ip_str = ip_str[0:a]
+                hdr += bytearray(struct.pack('B%is'%a, prefix, ip_str))
+
+        print '##serialize nlri success'
+
         return hdr
 
 
@@ -763,6 +819,7 @@ class mp_reach_nlri(object):
             (addr_family, sub_addr_family, next_hop_len) = struct.unpack_from('!HBB', buf, offset)
             offset += 4
 
+        print '**next_hop_len',next_hop_len
         next_hop = []
         if next_hop_len == 4:
             (temp_next_hop,) = struct.unpack_from('!I', buf, offset)
@@ -774,6 +831,7 @@ class mp_reach_nlri(object):
                     (temp_next_hop,) = struct.unpack_from('!16s', buf, offset)
                     offset += 16
                     next_hop.append(convert.bin_to_ipv6(temp_next_hop))
+                    print '**mp_reach_nlri next_hop',convert.bin_to_ipv6(temp_next_hop)
 
         if len(buf) > offset:
             (num_of_snpas,) = struct.unpack_from('!B', buf, offset)
@@ -786,6 +844,7 @@ class mp_reach_nlri(object):
                     (snap,) = struct.unpack_from('!%is' % len_of_snap, buf, offset)
                     offset += len_of_snap
                     snaps.append((len_of_snap,snap))
+       
       
         nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)       
         while len(buf) > offset:
@@ -819,30 +878,31 @@ class mp_reach_nlri(object):
             _tuple = (len_nlri,ip_nlri)
             nlri.add(_tuple)
             offset += a
+            #print '**mp_reach_nlri offset',offset
             
         msg = cls(flag, code, length, addr_family, sub_addr_family, next_hop_len, next_hop,
                   num_of_snpas, snaps, nlri)
         return msg
 
     def serialize(self):
-        #serialise wd_route_len and path_attr_len first
+        #serialise wd_routes_len and path_attr_len first
         hdr = bytearray(struct.pack(self._PACK_STR + 'HB', self.flag, self.code, self.length, self.addr_family,
                                     self.sub_addr_family))
+
         self.length = 3
         if self.next_hop_len == 4:
             hdr += bytearray(struct.pack('!BI', self.next_hop_len, convert.ipv4_to_int(self.next_hop)))
             self.length += 4 + 1
-        elif self.next_hop_len/16 !=0:
-            hdr += bytearray(struct.pack('!B', self.next_hop_len))
-            self.length += 1
+        elif self.next_hop_len/16 !=0: 
             for i in range(self.next_hop_len/16):
+                hdr += bytearray(struct.pack('!B', self.next_hop_len))
+                self.length += 1
                 hdr += bytearray(struct.pack('!8H',*convert.ipv6_to_arg_list(self.next_hop[i])))
                 self.length += 16
         elif self.next_hop_len == 0:
             hdr += bytearray(struct.pack('!B', self.next_hop_len))
             self.length += 1
-
-        #snaps [(len_of_snap,snap),(),]
+       
         hdr += bytearray(struct.pack('!B', self.num_of_snpas))
         self.length += 1
         if self.num_of_snpas != 0:
@@ -853,18 +913,42 @@ class mp_reach_nlri(object):
                 else:
                     hdr += bytearray(struct.pack('!B', self.snaps[i][0]))
                 self.length += len_of_snap + 1
-        
+        '''
         #nlri
+
         if len(self.nlri) != 0:
             for prefix, ip in self.nlri:
                 a = prefix/8
                 if 0 != prefix%8:
                     a += 1
                 if self.addr_family == 1:
-                    #ip_int = convert.ipv4_to_int(ip)
-                    #ip_list = convert.ipv4_to_list(ip_int, prefix)
+                    ip_int = convert.ipv4_to_int(ip)
+                    ip_list = convert.ipv4_to_list(ip_int, prefix)
                     #b = len(ip_list) * 'B'
-                    #hdr += bytearray(struct.pack('!B%s' % b, prefix, *ip_list))
+                    hdr += bytearray(struct.pack('!B%iB'%a, prefix, *ip_list))
+              
+                elif self.addr_family == 2:
+                    
+                    ip_temp_list = convert.ipv6_to_arg_list(ip)
+                    ip_list = []
+                    for i in xrange(8):
+                        ip_list.append((ip_temp_list[i]>>8)&0xff)
+                        ip_list.append((ip_temp_list[i])&0xff)
+                    ip_list = ip_list[0:a]
+                    hdr += bytearray(struct.pack('!B%iB'%a,prefix,*ip_list))
+                    
+
+                
+                self.length += 1 + a
+        #print '**mp_reach_nlri self.length',self.length
+        '''
+        #nlri
+        if len(self.nlri) != 0:
+            for prefix, ip in self.nlri:
+                a = prefix/8
+                if 0 != prefix%8:
+                    a += 1
+                if self.addr_family == 1:                   
                     ip_int = convert.ipv4_to_int(ip)
                     ip_str = struct.pack('!I',ip_int)
                     if a != 4:
@@ -874,13 +958,11 @@ class mp_reach_nlri(object):
                     ip_str = struct.pack('!8H',*convert.ipv6_to_arg_list(ip))
                     if a != 16:
                         ip_str = ip_str[0:a]
-                
+                self.length += 1 + a
                 hdr += bytearray(struct.pack('B%is'%a, prefix, ip_str))
 
-           
         print '## mp_reach_nlri serialize nlri success'
-        return hdr
-
+        
         if self._PACK_STR == '!BBH':
             struct.pack_into('!H', hdr, 2, self.length)
         else:
