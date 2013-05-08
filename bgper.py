@@ -51,7 +51,7 @@ class BGPer(app_manager.RyuApp):
 
         server = Server(handler)
         g = hub.spawn(server)
-        hub.spawn(self._test)
+        #hub.spawn(self._test)
         g.wait()
 
     def _test(self):

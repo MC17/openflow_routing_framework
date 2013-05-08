@@ -372,10 +372,10 @@ class NLRI(object):
     def __str__(self):
         if self._4or6 == 4:
             return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, convert.ipv4_to_str(self.prefix))
+                   (self.length, self.prefix)
         else:
             return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, convert.bin_to_ipv6(self.prefix))
+                   (self.length, self.prefix)
 
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
@@ -603,6 +603,16 @@ class origin(object):
         hdr = bytearray(struct.pack(self._PACK_STR + 'B', self.flag, self.code, self.length, self.value))
         return hdr
 
+    def __str__(self):
+        ans = 'origin: '
+        if self.value == 0:
+            ans += 'IGP'
+        elif self.value == 1:
+            ans += 'EGP'
+        else:
+            ans += 'unknown'
+        return '<%s>' % ans
+
 
 @bgp4_update.register_path_attributes_type(bgp4_update._AS_PATH)
 class as_path(object):
@@ -673,6 +683,18 @@ class as_path(object):
         struct.pack_into('!' + self._PACK_STR[3], hdr, 2, self.length)
         return hdr
 
+    def __str__(self):
+        ans = 'AS PATH: '
+        if self.as_type == 1:
+            ans += 'type: AS_SET '
+        elif self.as_type == 2:
+            ans += 'type: AS_SEQUENCE '
+
+        for i in self.as_values:
+            ans += str(i) + ' '
+
+        return '<%s>' % ans
+            
 
 @bgp4_update.register_path_attributes_type(bgp4_update._NEXT_HOP)
 class next_hop(object):
@@ -709,6 +731,11 @@ class next_hop(object):
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR + 'I', self.flag, self.code, self.length, self._next_hop))
         return hdr
+
+    def __str__(self):
+        ans = 'Next hop: '
+        ans += convert.ipv4_to_str(self._next_hop)
+        return '<%s>' % ans
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
 class multi_exit_disk(object):

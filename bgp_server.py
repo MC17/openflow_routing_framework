@@ -14,6 +14,7 @@ from ryu.lib.packet import packet, ethernet
 
 import BGP4
 import convert
+import route_entry
 
 
 BGP_TCP_PORT = 179
@@ -36,7 +37,7 @@ class Server(object):
         
         # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
         #listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler)
+        server = StreamServer(('::', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -178,10 +179,10 @@ class Connection(object):
         
         print '----UPDATE----'
         update_msg = msg.data
-        print update_msg.wd_routes
-        print update_msg.path_attr
-        print update_msg.nlri
-        print update_msg.total_len
+        for i in update_msg.path_attr:
+            print i
+        for i in update_msg.nlri:
+            print i
         
 
     def _handle_notification(self, msg):
