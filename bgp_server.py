@@ -176,7 +176,6 @@ class Connection(object):
 
     def _handle_update(self, msg):
         
-        
         print '----UPDATE----'
         update_msg = msg.data
         for i in update_msg.path_attr:
