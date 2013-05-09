@@ -454,7 +454,7 @@ class bgp4_update(object):
                         temp_list = []
                         while len(temp_list) < 4 - a:
                             temp_list.append(0)
-                        wd_temp_route += bytearray(struct.pack('%iB'%(4 - a),*temp_list))
+                        wd_temp_route += struct.pack('%iB'%(4 - a),*temp_list)
                         (wd_route_int,) = struct.unpack('!I', wd_temp_route)
                         wd_route = convert.ipv4_to_str(wd_route_int)
                 _tuple = (wd_len, wd_route)
