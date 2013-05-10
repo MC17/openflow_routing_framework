@@ -403,7 +403,7 @@ class bgp4_update(object):
     _ORIGIN = 1
     _AS_PATH = 2
     _NEXT_HOP = 3
-    _MULTI_EXIT_DISK = 4
+    _MULTI_EXIT_DISC = 4
     _MP_REACH_NLRI = 14
     _MP_UNREACH_NLRI = 15
 
@@ -737,8 +737,8 @@ class next_hop(object):
         ans += convert.ipv4_to_str(self._next_hop)
         return '<%s>' % ans
 
-@bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISK)
-class multi_exit_disk(object):
+@bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISC)
+class multi_exit_disc(object):
     
     """
 
@@ -757,7 +757,7 @@ class multi_exit_disk(object):
     _PACK_STR = 'BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self, flag=0x80, code=bgp4_update._MULTI_EXIT_DISK, length=1, value=0):
+    def __init__(self, flag=0x80, code=bgp4_update._MULTI_EXIT_DISC, length=1, value=0):
         self.flag = flag
         self.code = code
         self.length = length
