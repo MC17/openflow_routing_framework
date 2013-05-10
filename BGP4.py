@@ -373,15 +373,51 @@ class NLRI(object):
     def __init__(self, length, prefix, _4or6 = 4):
         self.length = length
         self.prefix = prefix
+        # the human readable string
+        if _4or6 == 4:
+            self.string = convert.bin_to_ipv4(self.prefix)
+        elif _4or6 == 6:
+            self.string = convert.bin_to_ipv6(self.prefix)
         self._4or6 = _4or6
     def __str__(self):
         if self._4or6 == 4:
             return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, self.prefix)
+                   (self.length, self.string)
         else:
             return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, self.prefix)
-
+                   (self.length, self.string)
+    @classmethod
+    def parser(cls, buf, offset, length, _4or6):
+        """
+            parse the buffer, with parameters offset/length/4or6,
+            and return a list of NLRIs
+        """
+        entries = []
+        while length > 0:
+            (prefix_len,) = struct.unpack_from('!B', buf, offset)
+            offset += 1
+            length -= 1
+            prefix_bytes = (prefix_len + 7) / 8
+            if prefix_bytes == 0:
+                prefix_arg_list = ()
+            else:
+                prefix_arg_list = struct.unpack_from('!%sB' % prefix_bytes,
+                                                     buf, offset)
+            offset += prefix_bytes
+            length -= prefix_bytes
+            nlri = None
+            if _4or6 == 4:
+                prefix_arg_list += (0,) * (4 - prefix_bytes)
+                print 'prefix:', prefix_arg_list
+                prefix = struct.pack('!4B', *prefix_arg_list)
+                nlri = NLRI(prefix_len, prefix, 4)
+            elif _4or6 == 6:
+                prefix_arg_list += (0,) * (16 - prefix_bytes)
+                print 'prefix:', prefix_arg_list
+                prefix = struct.pack('!16B', *prefix_arg_list)
+                nlri = NLRI(prefix_len, prefix, 16)
+            entries.append(nlri)
+        return entries
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
 class bgp4_update(object):
@@ -420,11 +456,9 @@ class bgp4_update(object):
             return cls
 
         return _register_path_attributes_type
-
-    # we only consider BGP+,wd_rout may be replaced by MP_UNREACH_NLRI in path_attr,and the same to nlri
     
     def __init__(self, wd_routes_len = 0, wd_routes = [], path_attr_len = 0,
-                 path_attr = [], nlri = set(), total_len = 0):
+                 path_attr = [], nlri = [], total_len = 0):
         self.wd_routes_len = wd_routes_len
         self.wd_routes = wd_routes
         self.path_attr_len = path_attr_len
@@ -438,37 +472,12 @@ class bgp4_update(object):
 
         (wd_routes_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-        # wd_routes_len
-        wd_routes = []
-        if wd_routes_len != 0:            
-            len_ = wd_routes_len
-            while len_ > 0:
-                (wd_len,) = struct.unpack_from('!B', buf, offset)
-                offset += 1
-                len_ -= 1
-                a = wd_len/8
-                if 0 != wd_len%8:
-                    a += 1
-                if a == 0:
-                    wd_route = '0.0.0.0'                    
-                else:
-                    (wd_temp_route,) = struct.unpack_from('%is'%a, buf, offset)
-                    offset += a
-                    len_ -= a
-                    if a < 4:
-                        temp_list = []
-                        while len(temp_list) < 4 - a:
-                            temp_list.append(0)
-                        wd_temp_route += struct.pack('%iB'%(4 - a),*temp_list)
-                        (wd_route_int,) = struct.unpack('!I', wd_temp_route)
-                        wd_route = convert.ipv4_to_str(wd_route_int)
-                _tuple = (wd_len, wd_route)
-                wd_routes.append(_tuple)
-        
+        wd_routes = NLRI.parser(buf, offset, wd_routes_len, 4)
+        offset += wd_routes_len    
 
         (path_attr_len,) = struct.unpack_from('!H', buf, offset)
         offset += 2
-        msg = cls(wd_routes_len, wd_routes, path_attr_len, [], set())
+        msg = cls(wd_routes_len, wd_routes, path_attr_len, [], [])
         len_ = path_attr_len
         while len_ > 0:
             (flag, code) = struct.unpack_from('!BB', buf, offset)
@@ -486,32 +495,13 @@ class bgp4_update(object):
                 (length,) = struct.unpack_from('!B', buf, offset)
                 offset += 1 + length
                 len_ -= 1 + length
-          
-        nlri = []
-        nlri_len = 0
-        while len(buf) > offset:
-            (len_nlri,) = struct.unpack_from('!B', buf, offset)
-            offset += 1
 
-            a = len_nlri / 8
-            if len_nlri % 8 != 0:
-                a += 1
-            (ip_str,) = struct.unpack_from('!%is'%a, buf, offset)# e.g (192,168,8,)
-            if a < 4:
-                temp_list = []  # need to append 0
-                while len(temp_list) < 4 - a:
-                    temp_list.append(0)
-                ip_str += struct.pack('!%iB'%(4 - a),*temp_list)
-            (ip_int,) = struct.unpack('!I',ip_str)
-            ip_nlri = convert.ipv4_to_str(ip_int)
-            nlri_entry = NLRI(len_nlri, ip_nlri)
-            nlri.append(nlri_entry)
-            offset += a
-            nlri_len += 1 + a
-        update_total_len = 23 + path_attr_len + wd_routes_len + nlri_len
-        msg.nlri = nlri
+        nlri_len = len(buf) - offset
+        msg.nlri = NLRI.parser(buf, offset, nlri_len, 4)
+        # no longer add offset here since this is the last field
 
-        msg.total_len = update_total_len
+        msg.total_len = 23 + path_attr_len + wd_routes_len + nlri_len
+
         return msg
 
     def serialize(self):
@@ -865,39 +855,12 @@ class mp_reach_nlri(object):
                     (len_of_snap,) = struct.unpack_from('!B', buf, offset)
                     offset += 1 + len_of_snap
       
-        nlri = set()    # e.g. set((prefix,ip),(prefix,ip),) eg (24,3232237568)       
-        while len(buf) > offset:
-            (len_nlri,) = struct.unpack_from('!B', buf, offset)
-            offset += 1
+        # the "5" includes AF(2), SAFI(1), len of next_hop_len(1),
+        # and reserved(1)
+        nlri_len = length - 5 - next_hop_len
+        # we could safely assume it's IPv6 here
+        nlri = NLRI.parser(buf, offset, nlri_len, 6)
 
-            a = len_nlri / 8
-            if len_nlri % 8 != 0:
-                a += 1   # aB
-            
-            (ip_str,) = struct.unpack_from('!%is'%a, buf, offset)  # e.g (192,168,8,)
-            
-            temp_list = []  # need to append 0            
-            if addr_family == 1: #ipv4
-                if a < 4:
-                    #pad ip_str to a complete ipv4 address
-                    while len(temp_list) < (4 - a):
-                        temp_list.append(0)
-                    ip_str += bytearray(struct.pack('!%iB'%(4 - a),*temp_list))
-                ip_int = stuct.unpack('!I',ip_str)
-                ip_nlri = convert.ipv4_to_str(ip_int)
-
-            elif addr_family == 2: #ipv6
-                if a < 16:
-                    while len(temp_list) < (16 - a):
-                        temp_list.append(0)
-                    ip_str += struct.pack('!%iB'%(16-a),*temp_list)
-                ip_nlri = convert.bin_to_ipv6(ip_str)
-            
-            _tuple = (len_nlri,ip_nlri)
-            nlri.add(_tuple)
-            offset += a
-            #print '**mp_reach_nlri offset',offset
-            
         msg = cls(flag, code, length, addr_family, sub_addr_family,
                   next_hop_len, next_hop, nlri)
         return msg
@@ -1000,32 +963,11 @@ class mp_unreach_nlri(object):
         (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR + 'BB', buf, offset)
         offset += cls._MIN_LEN + 3
         msg = cls(flag, code, length, addr_family, sub_addr_family)
-        len_ = length
-        len_ -= 3
-        #only support ipv6
-        msg.wd_routes = []
-        while len_ > 0:
-            (wd_len,) = struct.unpack_from('!B', buf, offset)
-            offset += 1
-            len_ -= 1
-            a = wd_len/8
-            if 0 != wd_len%8:
-                a += 1
-            if a == 0:
-                wd_route = '::'                    
-            else:
-                (wd_temp_route,) = struct.unpack_from('%is'%a, buf, offset)
-                offset += a
-                len_ -= a
-                if a < 16:
-                    temp_list = []
-                    while len(temp_list) < 16 - a:
-                        temp_list.append(0)
-                    wd_temp_route += struct.pack('%iB'%(16 - a),*temp_list)
-                wd_route = convert.bin_to_ipv6(wd_temp_route)
-                print '######mp_unreach_nlri:',wd_route,wd_len
-            _tuple = (wd_len, wd_route)
-            msg.wd_routes.append(_tuple)
+
+        # the "3" is AFI(2) and SAFI(1)
+        nlri_len = length - 3
+        # also, we could safely assume it's IPv6 here
+        msg.wd_routes = NLRI.parser(buf, offset, nlri_len, 6)
         return msg
 
     def serialize(self):

@@ -106,6 +106,13 @@ def bin_to_ipv4_prefix(bin):
             pass
     return n
 
+def bin_to_ipv4(bin):
+    """
+        '!4B' packed string to human readable ipv4 string
+    """
+    arg_list = struct.unpack('!4B', bin)
+    return '.'.join(str(x) for x in arg_list)
+
 # ipv6
 
 IPV6_PACK_STR = '!8H'
