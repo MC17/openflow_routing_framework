@@ -110,14 +110,14 @@ class Connection(object):
     def _handle(self, msg):
         msg_type = msg.type_
         if msg_type == BGP4.BGP4_OPEN:
-            self._handle_open(msg)
+            self._handle_open(msg.data)
             print 'receive OPEN msg'
         elif msg_type == BGP4.BGP4_UPDATE:
             print 'receive UPDATE msg'
-            self._handle_update(msg) 
+            self._handle_update(msg.data) 
         elif msg_type == BGP4.BGP4_NOTIFICATION:            
             print 'receive NOTIFICATION msg'
-            self._handle_notification(msg)            
+            self._handle_notification(msg.data)            
         elif msg_type == BGP4.BGP4_KEEPALIVE:
             self._handle_keepalive(msg)
             print 'receive KEEPALIVE msg'
@@ -134,14 +134,13 @@ class Connection(object):
         # XXX
         return True
 
-    def _handle_open(self,msg):
+    def _handle_open(self, msg):
 
-        open_msg = msg.data
-        self.peer_as = open_msg.my_as
-        peer_holdtime = open_msg.hold_time
+        self.peer_as = msg.my_as
+        peer_holdtime = msg.hold_time
         self.hold_time = min(peer_holdtime, self.hold_time)
-        self.peer_id = open_msg.bgp_identifier
-        self.peer_capabilities = open_msg.data
+        self.peer_id = msg.bgp_identifier
+        self.peer_capabilities = msg.data
         for capability in self.peer_capabilities:
             if isinstance(capability, BGP4.multi_protocol_extension):
                 if capability.addr_family == 1:
@@ -177,12 +176,36 @@ class Connection(object):
     def _handle_update(self, msg):
         
         print '----UPDATE----'
-        update_msg = msg.data
-        for i in update_msg.path_attr:
-            print i
-        for i in update_msg.nlri:
-            print i
+        no_nlri = True
+        entries = []
+        if msg.nlri:
+            no_nlri = False
+            for i in msg.nlri:
+                entry = route_entry.BGPEntry(i.prefix, i.length, 4)
+                entries.append(entry)
         
+        attributes = route_entry.Attributes()
+        for i in msg.path_attr:
+            if i.code == BGP4.bgp4_update._ORIGIN:
+                attributes.origin = i.value
+            elif i.code == BGP4.bgp4_update._AS_PATH:
+                for path in i.as_values:
+                    if path == Server.local_as:
+                        return
+                attributes.as_path_type = i.as_type
+                attributes.as_path = i.as_values
+            elif i.code == BGP4.bgp4_update._NEXT_HOP:
+                attributes.next_hop = i._next_hop
+            elif i.code == BGP4.bgp4_update._MULTI_EXIT_DISC:
+                attributes.multi_exit_disc = i.value
+            elif i.code == BGP4.bgp4_update._MP_REACH_NLRI:
+                _4or6 = 0
+                if i.addr_family == BGP4.AFI_IPV4:
+                    _4or6 = 4
+                elif i.addr_family == BGP4.AFI_IPV6:
+                    _4or6 = 6
+                attributes.next_hop = i.next_hop
+                
 
     def _handle_notification(self, msg):
         """
@@ -195,8 +218,7 @@ class Connection(object):
         p.serialize()
         self.send(p.data)
         """
-        no = msg.data
-        print 'error code,sub error code',no.err_code,no.err_subcode         
+        print 'error code,sub error code',msg.err_code,msg.err_subcode         
 
     def _handle_keepalive(self,msg):
         self.send_keepalive_msg()
