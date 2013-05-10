@@ -14,6 +14,7 @@ from ryu.lib.packet import packet, ethernet
 
 import BGP4
 import convert
+import route_entry
 
 
 BGP_TCP_PORT = 179
@@ -36,7 +37,7 @@ class Server(object):
         
         # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
         #listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
-        server = StreamServer(('0.0.0.0', BGP_TCP_PORT), self.handler)
+        server = StreamServer(('::', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
         server.serve_forever()
@@ -175,36 +176,13 @@ class Connection(object):
 
     def _handle_update(self, msg):
         
-        
         print '----UPDATE----'
         update_msg = msg.data
-        print update_msg.wd_routes
-        print update_msg.path_attr
-        print update_msg.nlri
-        print update_msg.total_len
+        for i in update_msg.path_attr:
+            print i
+        for i in update_msg.nlri:
+            print i
         
-        print '---------start send update test'
-
-        if self._4or6 == 4:
-            pass
-        elif self._4or6 == 6:
-            origin_msg = BGP4.origin(0x40, BGP4.bgp4_update._ORIGIN, 1, 1)
-            as_value = [Server.local_as]
-            as_path_msg = BGP4.as_path(0x40, BGP4.bgp4_update._AS_PATH,0,2,1,as_value)
-
-            nlri = set()
-            local_ip = (64,Server.local_ip6) # (prefix,ip)
-            nlri.add(local_ip)
-            mp_reach_nlri = BGP4.mp_reach_nlri(0x80,BGP4.bgp4_update._MP_REACH_NLRI,0,2,1,16,[Server.local_ip6],0,[],nlri)
-            path_attr = [origin_msg, as_path_msg, mp_reach_nlri]
-            update_reply = BGP4.bgp4_update(0, [], 0, path_attr, []) 
-            bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_reply)
-            p = packet.Packet()
-            p.add_protocol(bgp4_reply)
-            p.serialize()
-            self.send(p.data)
-            
-        print '---------send update test success'
 
     def _handle_notification(self, msg):
         """

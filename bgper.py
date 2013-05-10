@@ -45,13 +45,9 @@ class BGPer(app_manager.RyuApp):
         Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
                                                         Server.local_as))
 
-        #we also need to defined a ipv4 route table and a ipv6 route table
-        #they may be in the form of 'target_network,prefix,next_jump'
-
-
         server = Server(handler)
         g = hub.spawn(server)
-        hub.spawn(self._test)
+        #hub.spawn(self._test)
         g.wait()
 
     def _test(self):

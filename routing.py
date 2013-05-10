@@ -33,7 +33,7 @@ class Routing(app_manager.RyuApp):
 
         self.routing_algo = algorithm.Dijkstra(self.dpid_to_switch)
 
-        self.filepath = 'config.xml'
+        self.filepath = 'config2.xml'
 
         try:
             self.switch_cfg = read_cfg(self.filepath)
@@ -740,9 +740,9 @@ class Routing(app_manager.RyuApp):
             # raise an event to `moudle B`
             # drop pkt & return by now
             # XXX
-            req = dest_event.EventDestinationRequest(protocol_pkt.dst, _4or6)
-            reply = self.send_request(req)
-            print 'reply from bgper:', reply.dpid
+            #req = dest_event.EventDestinationRequest(protocol_pkt.dst, _4or6)
+            #reply = self.send_request(req)
+            #print 'reply from bgper:', reply.dpid
             print 'dropped because dst_switch == None'
             self.drop_pkt(msg)
             return
