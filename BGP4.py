@@ -389,8 +389,10 @@ class NLRI(object):
     @classmethod
     def parser(cls, buf, offset, length, _4or6):
         """
-            parse the buffer, with parameters offset/length/4or6,
-            and return a list of NLRIs
+            parse the buffer and return a list of NLRIs
+            offset: starting point to parse the buffer
+            length: the range to parse is from offset to offset + length
+            _4or6: whether the protocol is IPv4 or IPv6
         """
         entries = []
         while length > 0:
@@ -498,7 +500,7 @@ class bgp4_update(object):
 
         nlri_len = len(buf) - offset
         msg.nlri = NLRI.parser(buf, offset, nlri_len, 4)
-        # no longer add offset here since this is the last field
+        # no longer increase offset here since this is the last field
 
         msg.total_len = 23 + path_attr_len + wd_routes_len + nlri_len
 

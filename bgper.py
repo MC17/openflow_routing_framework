@@ -45,16 +45,23 @@ class BGPer(app_manager.RyuApp):
         Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
                                                         Server.local_as))
 
+        Server.route_table = set()
+
         server = Server(handler)
         g = hub.spawn(server)
-        #hub.spawn(self._test)
+        hub.spawn(self._test)
         g.wait()
 
     def _test(self):
         while True:
             print 'looping...'
-            for k,v in BGPer.peers.iteritems():
-                print k, v
+            #for k,v in BGPer.peers.iteritems():
+            #    print k, v
+            for i in Server.route_table:
+                print i._4or6
+                print convert.bin_to_ipv4(i.ip) if i._4or6 == 4 else \
+                        convert.bin_to_ipv6(i.ip)
+                print i.attributes.as_path
 
             hub.sleep(3)
 

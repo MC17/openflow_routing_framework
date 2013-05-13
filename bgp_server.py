@@ -74,7 +74,6 @@ class Connection(object):
         self.peer_capabilities = []
         self._4or6 = 0
         self.hold_time = 240
-        self.route_table = []
     
     def close(self):
         print "close the connect from", self.address
@@ -105,7 +104,7 @@ class Connection(object):
             self._handle(msg)
             eventlet.sleep(0)
                     
-                
+
 
     def _handle(self, msg):
         msg_type = msg.type_
@@ -114,7 +113,7 @@ class Connection(object):
             print 'receive OPEN msg'
         elif msg_type == BGP4.BGP4_UPDATE:
             print 'receive UPDATE msg'
-            self._handle_update(msg.data) 
+            self._handle_update(msg.data)
         elif msg_type == BGP4.BGP4_NOTIFICATION:            
             print 'receive NOTIFICATION msg'
             self._handle_notification(msg.data)            
@@ -172,17 +171,29 @@ class Connection(object):
         else:
             self.send_notification_msg()
     
+    def __check_AFI(self, afi):
+        if afi == BGP4.AFI_IPV4:
+            return 4
+        elif afi == BGP4.AFI_IPV6:
+            return 6
+        else:
+            return None
 
     def _handle_update(self, msg):
         
         print '----UPDATE----'
-        no_nlri = True
-        entries = []
+        advert_entries = []
+        withdraw_entries = []
+
+        if msg.wd_routes:
+            for i in msg.wd_routes:
+                entry = route_entry.BGPEntry(i.prefix, i.length, 4)
+                withdraw_entries.append(entry)
+
         if msg.nlri:
-            no_nlri = False
             for i in msg.nlri:
                 entry = route_entry.BGPEntry(i.prefix, i.length, 4)
-                entries.append(entry)
+                advert_entries.append(entry)
         
         attributes = route_entry.Attributes()
         for i in msg.path_attr:
@@ -199,13 +210,30 @@ class Connection(object):
             elif i.code == BGP4.bgp4_update._MULTI_EXIT_DISC:
                 attributes.multi_exit_disc = i.value
             elif i.code == BGP4.bgp4_update._MP_REACH_NLRI:
-                _4or6 = 0
-                if i.addr_family == BGP4.AFI_IPV4:
-                    _4or6 = 4
-                elif i.addr_family == BGP4.AFI_IPV6:
-                    _4or6 = 6
+                _4or6 = self.__check_AFI(i.addr_family)
                 attributes.next_hop = i.next_hop
-                
+                if i.nlri:
+                    for j in i.nlri:
+                        entry = route_entry.BGPEntry(j.prefix, j.length, _4or6)
+                        advert_entries.append(entry)
+            elif i.code == BGP4.bgp4_update._MP_UNREACH_NLRI:
+                _4or6 = self.__check_AFI(i.addr_family)
+                if i.wd_routes:
+                    for j in i.wd_routes:
+                        entry = route_entry.BGPEntry(j.prefix, j.length, _4or6)
+                        withdraw_entries.append(entry)
+        self.__add_route(advert_entries, attributes)
+        self.__remove_route(withdraw_entries)
+
+    def __add_route(self, advert_entries, attributes):
+        # XXX acquire route table lock?
+        for entry in advert_entries:
+            entry.attributes = attributes
+            Server.route_table.add(entry)
+
+    def __remove_route(self, withdraw_entries):
+        # XXX
+        pass
 
     def _handle_notification(self, msg):
         """
