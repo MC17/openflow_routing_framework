@@ -229,11 +229,14 @@ class Connection(object):
         # XXX acquire route table lock?
         for entry in advert_entries:
             entry.attributes = attributes
-            Server.route_table.add(entry)
+            Server.route_table.append(entry)
 
     def __remove_route(self, withdraw_entries):
-        # XXX
-        pass
+        # XXX acquire route table lock?
+        for i in withdraw_entries:
+            for j in Server.route_table:
+                if i == j:
+                    Server.route_table.remove(j)
 
     def _handle_notification(self, msg):
         """

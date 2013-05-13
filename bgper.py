@@ -45,7 +45,7 @@ class BGPer(app_manager.RyuApp):
         Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
                                                         Server.local_as))
 
-        Server.route_table = set()
+        Server.route_table = []
 
         server = Server(handler)
         g = hub.spawn(server)
