@@ -245,7 +245,6 @@ class Connection(object):
 
     def _handle_keepalive(self,msg):
         self.send_keepalive_msg()
-        self.send_current_route_table()
         
     @_deactivate
     def _send_loop(self):

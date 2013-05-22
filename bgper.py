@@ -12,6 +12,7 @@ from bgp_server import Server, Connection
 import BGP4
 from util import read_bgp_config
 
+import ipdb
 
 class BGPer(app_manager.RyuApp):
     """
@@ -49,8 +50,7 @@ class BGPer(app_manager.RyuApp):
 
         server = Server(handler)
         g = hub.spawn(server)
-        hub.spawn(self._test)
-        g.wait()
+        #hub.spawn(self._test)
 
     def _test(self):
         while True:

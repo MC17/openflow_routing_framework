@@ -18,6 +18,7 @@ import algorithm
 import convert
 import dest_event
 
+import ipdb
 
 class Routing(app_manager.RyuApp):
     ARP_TIMEOUT = 600    # in seconds
@@ -740,9 +741,9 @@ class Routing(app_manager.RyuApp):
             # raise an event to `moudle B`
             # drop pkt & return by now
             # XXX
-            #req = dest_event.EventDestinationRequest(protocol_pkt.dst, _4or6)
-            #reply = self.send_request(req)
-            #print 'reply from bgper:', reply.dpid
+            req = dest_event.EventDestinationRequest(protocol_pkt.dst, _4or6)
+            reply = self.send_request(req)
+            print 'reply from bgper:', reply.dpid
             print 'dropped because dst_switch == None'
             self.drop_pkt(msg)
             return
