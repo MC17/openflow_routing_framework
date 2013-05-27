@@ -34,7 +34,7 @@ class Routing(app_manager.RyuApp):
 
         self.routing_algo = algorithm.Dijkstra(self.dpid_to_switch)
 
-        self.filepath = 'config2.xml'
+        self.filepath = 'routing.config'
 
         try:
             self.switch_cfg = read_cfg(self.filepath)
@@ -52,7 +52,7 @@ class Routing(app_manager.RyuApp):
     def __test(self):
         print '-------------------'
         for k, switch in self.dpid_to_switch.iteritems():
-            print switch, switch.name
+            print k, switch, switch.name
             for k, port in switch.ports.iteritems():
                 print port
                 print port.peer_switch_dpid
@@ -695,6 +695,11 @@ class Routing(app_manager.RyuApp):
                         return self.dpid_to_switch[dpid], port_no
         return None, None
 
+    def name_to_switch(self, switch_name):
+        for dpid, s in self.dpid_to_switch.iteritems():
+            if s.name == switch_name:
+                return s
+
     def _handle_ip(self, msg, pkt, protocol_pkt):
         #print 'ip', protocol_pkt
 
@@ -730,7 +735,7 @@ class Routing(app_manager.RyuApp):
             print 'dst address:', convert.ipv4_to_str(protocol_pkt.dst)
         else:
             print 'dst address:', convert.bin_to_ipv6(protocol_pkt.dst)
-        print dst_switch, dst_port_no
+        print 'destination switch, port_no', dst_switch, dst_port_no
 
         if dst_port_no == ofproto_v1_0.OFPP_LOCAL:
             # should be handled by ICMP/ARP etc.
@@ -739,14 +744,28 @@ class Routing(app_manager.RyuApp):
         if dst_switch == None:
             # can't find destination in this domain
             # raise an event to `moudle B`
-            # drop pkt & return by now
-            # XXX
             req = dest_event.EventDestinationRequest(protocol_pkt.dst, _4or6)
             reply = self.send_request(req)
-            print 'reply from bgper:', reply.dpid
-            print 'dropped because dst_switch == None'
-            self.drop_pkt(msg)
-            return
+            if reply.dpid:
+                dst_switch = self.dpid_to_switch[reply.dpid]
+            elif reply.switch_name:
+                dst_switch = self.name_to_switch(reply.switch_name)
+                print dst_switch
+            else:
+                print 'dropped because dst_switch == None'
+                self.drop_pkt(msg)
+                return
+
+            if src_switch == dst_switch:
+                dst_port_no = None
+                for num, p in dst_switch.ports.iteritems():
+                    if p.gateway.border:
+                        # assume only one outport
+                        dst_port_no = p.port_no
+                        break
+                if dst_port_no:
+                    self.last_switch_out(msg, pkt, dst_port_no, _4or6)
+                    return
         elif src_switch == dst_switch:
             self.last_switch_out(msg, pkt, dst_port_no, _4or6)
             return

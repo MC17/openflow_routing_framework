@@ -35,8 +35,6 @@ class Server(object):
 
     def server_loop(self):
         
-        # line 70 in ryu.lib.hub.py is changed to self.server = eventlet.listen(*listen_info)
-        #listen_info = (('', BGP_TCP_PORT), socket.AF_INET6, self.conn_num)
         server = StreamServer(('::', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
@@ -231,16 +229,6 @@ class Connection(object):
                     Server.route_table.remove(j)
 
     def _handle_notification(self, msg):
-        """
-        send norification test
-
-        no = BGP4.bgp4_notification(1,2,None)
-        bgp = BGP4.bgp4(1, 46, BGP4.BGP4_NOTIFICATION, no)
-        p = packet.Packet()
-        p.add_protocol(bgp)
-        p.serialize()
-        self.send(p.data)
-        """
         print 'error code,sub error code',msg.err_code,msg.err_subcode         
 
     def _handle_keepalive(self,msg):

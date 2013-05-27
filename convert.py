@@ -64,12 +64,19 @@ def ipv4_to_str(ip):
     z = ip & 0xff
     return "%i.%i.%i.%i" % (w, x, y, z)
 
+def ipv4_4B_to_int(string):
+    dotted = bin_to_ipv4(string)
+    return ipv4_to_int(dotted)
 
 def ipv4_in_network(ip, network, prefix):
     '''
         return True if the ip address is in network/prefix,
         ip and network should be in binary representation
     '''
+
+    # for historical reason, network could be a '!4B' packed string
+    network = ipv4_4B_to_int(network)
+
     mask = ipv4_prefix_to_bin(prefix)
     if (mask & ip) == (mask & network):
         return True
@@ -108,8 +115,17 @@ def bin_to_ipv4_prefix(bin):
 
 def bin_to_ipv4(bin):
     """
-        '!4B' packed string to human readable ipv4 string
+        1) '!4B' packed string to human readable ipv4 string
+        2) int type 32bit number to human readable string
     """
+    string = None
+    try:
+        string = ipv4_to_str(bin)
+    except:
+        pass
+    if string:
+        return string
+
     arg_list = struct.unpack('!4B', bin)
     return '.'.join(str(x) for x in arg_list)
 

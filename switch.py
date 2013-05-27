@@ -44,7 +44,6 @@ class Port(switches.Port):
             print Port_type
             raise AttributeError
 
-        self.is_border = False  # if this is a border port of the network
         self.gateway = None
         self.cost = float('inf')
 

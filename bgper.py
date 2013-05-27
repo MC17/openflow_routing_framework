@@ -14,6 +14,18 @@ from util import read_bgp_config
 
 import ipdb
 
+def equal(dest_addr, route_entry):
+    if route_entry._4or6 == 4:
+        print convert.bin_to_ipv4(dest_addr), convert.bin_to_ipv4(route_entry.ip)
+        return convert.ipv4_in_network(dest_addr, route_entry.ip, \
+                                       route_entry.prefix_len)
+    elif route_entry._4or6 == 6:
+        print convert.bin_to_ipv6(dest_addr), convert.bin_to_ipv6(route_entry.ip)
+        return convert.ipv6_in_network(dest_addr, route_entry.ip, \
+                                       route_entry.prefix_len)
+    else:
+        return False
+
 class BGPer(app_manager.RyuApp):
     """
         the BGP part of this project(aka. "B")
@@ -67,14 +79,26 @@ class BGPer(app_manager.RyuApp):
 
     @set_ev_cls(dest_event.EventDestinationRequest)
     def destination_request_handler(self, event):
-        # for test only by now
         if event._4or6 == 4:
             print 'dst address:', convert.ipv4_to_str(event.dest_addr)
         else:
             print 'dst address:', convert.bin_to_ipv6(event.dest_addr)
-        reply = dest_event.EventDestinationReply(dpid = 0x0)
-        self.reply_to_request(event, reply)
 
+        longest_match = None
+        for entry in Server.route_table:
+            if event._4or6 == entry._4or6:
+                if equal(event.dest_addr, entry):
+                    if longest_match == None or \
+                            entry.prefix_len > longest_match.prefix_len:
+                        longest_match = entry
+
+        if longest_match:
+            name = self.bgp_cfg.get('border_switch')
+            reply = dest_event.EventDestinationReply(switch_name = name)
+        else:
+            reply = dest_event.EventDestinationReply()
+
+        self.reply_to_request(event, reply)
 
 def handler(socket, address):
     print 'connect from ', address
