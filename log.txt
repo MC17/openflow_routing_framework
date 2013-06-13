@@ -1,2 +1,0 @@
-2013.5.4 [can.]Start test sending/receiving UPDATE
-2013.5.4 Create this log file
