@@ -146,6 +146,8 @@ class Connection(object):
                     self._4or6 = 6
                 else:
                     self._4or6 = 0
+            if isinstance(capability, BGP4.support_4_octets_as_num):
+                self.peer_as = capability.as_num
 
         print '4/6:', self._4or6
         print 'peer_as:', self.peer_as
