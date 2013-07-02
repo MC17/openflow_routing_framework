@@ -231,8 +231,12 @@ class bgp4_open(object):
 
     def serialize(self):
         self.opt_para_len = 0
-        hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, self.my_as, self.hold_time,
-                                    self.bgp_identifier, self.opt_para_len))
+        # use a 2-octets AS number here, and the real(maybe 4 octets) AS
+        # number is in support_4_octets_as_num capability
+        two_octect_as = self.my_as % 65535
+        hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, 
+                        two_octect_as, self.hold_time,
+                        self.bgp_identifier, self.opt_para_len))
 
         if self.data != []:
             hdr += bytearray(struct.pack('!BB', self.type_, self.para_len))
