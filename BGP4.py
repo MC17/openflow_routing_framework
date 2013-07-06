@@ -429,8 +429,8 @@ class NLRI(object):
     def serialize(self):
         hdr = bytearray(struct.pack('!B', self.length))
         prefix_bytes = (self.length + 7) / 8
-        print 'length:', prefix_bytes
-        print 'prefix bytes', self.prefix[0:prefix_bytes]
+        #print 'length:', prefix_bytes
+        #print 'prefix bytes', self.prefix[0:prefix_bytes]
         hdr += bytearray(struct.pack('!%ss' % prefix_bytes,
                                      self.prefix[0:prefix_bytes]))
         return hdr
@@ -541,7 +541,7 @@ class bgp4_update(object):
             if len_ != self.wd_routes_len:
                 self.wd_routes_len = len_
                 struct.pack_into('!H', hdr, 0, self.wd_routes_len)
-            print '## serialize wd_routes success!'
+            #print '## serialize wd_routes success!'
 
         #path_attr
         hdr += bytearray(struct.pack('!H', self.path_attr_len))
@@ -554,13 +554,13 @@ class bgp4_update(object):
                     if attr.__dict__.has_key('length'):
                         self.path_attr_len += attr.length
             struct.pack_into('!H', hdr, 2 + self.wd_routes_len, self.path_attr_len)
-        print '## serialize path_attr success'
+        #print '## serialize path_attr success'
 
         #nlri
         for i in self.nlri:
             hdr += i.serialize()
 
-        print '##serialize nlri success'
+        #print '##serialize nlri success'
 
         return hdr
 
@@ -901,7 +901,7 @@ class mp_reach_nlri(object):
             self.length += len(sub_hdr)
             hdr += sub_hdr
 
-        print '## mp_reach_nlri serialize nlri success'
+        #print '## mp_reach_nlri serialize nlri success'
         
         if self._PACK_STR == '!BBH':
             struct.pack_into('!H', hdr, 2, self.length)
@@ -982,7 +982,7 @@ class mp_unreach_nlri(object):
             struct.pack_into('!H', hdr, 2, self.length)
         else:
             struct.pack_into('!B', hdr, 2, self.length)
-        print '## mp_unreach_nlri serialize success'
+        #print '## mp_unreach_nlri serialize success'
         return hdr
 
 
