@@ -583,7 +583,7 @@ class origin(object):
 
     """
 
-    _PACK_STR = 'BBB'
+    _PACK_STR = '!BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
     def __init__(self,flag = 0x40, code = bgp4_update._ORIGIN,
@@ -758,7 +758,7 @@ class multi_exit_disc(object):
 
     """
 
-    _PACK_STR = 'BBB'
+    _PACK_STR = '!BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
     def __init__(self, flag=0x80, code=bgp4_update._MULTI_EXIT_DISC, length=1, value=0):
