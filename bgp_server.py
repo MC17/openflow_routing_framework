@@ -303,9 +303,13 @@ class Connection(object):
                                                 i.attributes.multi_exit_disc)
                 path_attr.append(multi_exit_disc_msg)
             if i.attributes.as_path:
+                # information stored in as_path is the original got from
+                # peer's update messages, so when sending to others, we should
+                # insert server's AS number
                 as_path_msg = BGP4.as_path(as_type = i.attributes.as_path_type,
-                                    as_len = len(i.attributes.as_path),
-                                    as_values = i.attributes.as_path)
+                                    as_len = len(i.attributes.as_path) + 1,
+                                    as_values = [Server.local_as] + \
+                                                i.attributes.as_path)
                 path_attr.append(as_path_msg)
             # nlri
             if i._4or6 == 4:
