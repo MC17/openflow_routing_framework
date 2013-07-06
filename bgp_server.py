@@ -192,9 +192,8 @@ class Connection(object):
             if i.code == BGP4.bgp4_update._ORIGIN:
                 attributes.origin = i.value
             elif i.code == BGP4.bgp4_update._AS_PATH:
-                for path in i.as_values:
-                    if path == Server.local_as:
-                        return
+                if Server.local_as in i.as_values:
+                    return
                 attributes.as_path_type = i.as_type
                 attributes.as_path = i.as_values
             elif i.code == BGP4.bgp4_update._NEXT_HOP:
