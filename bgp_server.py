@@ -102,7 +102,7 @@ class Connection(object):
             self._handle(msg)
             eventlet.sleep(0)
                     
-    def _exact_receive(required_len):
+    def _exact_receive(self, required_len):
         '''
             receive exact size of data from socket
             returns empty string if socket closed/error
