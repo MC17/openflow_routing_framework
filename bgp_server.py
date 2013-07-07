@@ -63,7 +63,7 @@ class Connection(object):
         
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
-        self.send_q = Queue(1)
+        self.send_q = Queue(128)
 
         # data structures for BGP
         self.peer_ip = None
@@ -93,11 +93,11 @@ class Connection(object):
                                                            buffer(buf))
             required_len = packet_len - header_size
             
-            if required_len != 0:
+            while required_len != 0:
                 more_data = self.socket.recv(required_len)
                 buf += more_data
+                required_len = packet_len - len(buf)
 
-            assert len(buf) == packet_len
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
             eventlet.sleep(0)
