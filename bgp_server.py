@@ -173,11 +173,16 @@ class Connection(object):
         self.send_open_msg()
         
         if self.__check_capabilities(self.peer_capabilities):
-            self.send_keepalive_msg()
+            hub.spawn(self.keepalive)
             self.send_current_route_table()
         else:
             self.send_notification_msg()
-    
+
+    def keepalive(self):
+        while True:
+            self.send_keepalive_msg()
+            hub.sleep(self.hold_time / 3)    
+
     def __check_AFI(self, afi):
         if afi == BGP4.AFI_IPV4:
             return 4
@@ -245,10 +250,10 @@ class Connection(object):
                     Server.route_table.remove(j)
 
     def _handle_notification(self, msg):
-        print 'error code,sub error code',msg.err_code,msg.err_subcode         
+        print 'error code', msg.err_code, 'sub error code', msg.err_subcode
 
     def _handle_keepalive(self,msg):
-        self.send_keepalive_msg()
+        pass
         
     @_deactivate
     def _send_loop(self):
