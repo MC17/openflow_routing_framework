@@ -92,11 +92,13 @@ class Connection(object):
             (marker, packet_len, msg_type) = struct.unpack(BGP4_PACK_STR,
                                                            buffer(buf))
             required_len = packet_len - header_size
-            receive = self._exact_receive(required_len)
-            if receive != '':
-                buf.extend(receive)
-            else:
-                break
+            if required_len:
+                # notification message has only a header
+                receive = self._exact_receive(required_len)
+                if receive != '':
+                    buf.extend(receive)
+                else:
+                    break
 
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
