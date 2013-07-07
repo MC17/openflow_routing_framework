@@ -82,27 +82,40 @@ class Connection(object):
         header_size = BGP4_HEADER_SIZE
         
         while self.is_active:
-            buf = bytearray()     
-            recv = self.socket.recv(header_size)
-            if len(recv) == 0:
-                self.is_active = False
+            buf = bytearray()
+            receive = self._exact_receive(header_size)
+            if receive != '':
+                buf.extend(receive)
+            else:
                 break
-            
-            buf += recv
+
             (marker, packet_len, msg_type) = struct.unpack(BGP4_PACK_STR,
                                                            buffer(buf))
             required_len = packet_len - header_size
-            
-            while required_len != 0:
-                more_data = self.socket.recv(required_len)
-                buf += more_data
-                required_len = packet_len - len(buf)
+            receive = self._exact_receive(required_len)
+            if receive != '':
+                buf.extend(receive)
+            else:
+                break
 
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
             eventlet.sleep(0)
                     
-
+    def _exact_receive(required_len):
+        '''
+            receive exact size of data from socket
+            returns empty string if socket closed/error
+        '''
+        buf = bytearray()
+        while len(buf) < required_len:
+            more_data = self.socket.recv(required_len - len(buf))
+            if len(more_data) != 0:
+                buf.extend(more_data)
+            else:
+                self.is_active = False
+                return ''
+        return buf
 
     def _handle(self, msg):
         msg_type = msg.type_
