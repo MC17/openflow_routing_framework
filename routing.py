@@ -74,6 +74,7 @@ class Routing(app_manager.RyuApp):
         except KeyError:
             s = Switch(event.switch.dp)
             self.dpid_to_switch[dpid] = s
+            self.routing_algo.topology_last_update = time.time()
 
         self._pre_install_flow_entry(s)
 
@@ -81,6 +82,7 @@ class Routing(app_manager.RyuApp):
     def switch_leave_handler(self, event):
         try:
             del self.dpid_to_switch[event.switch.dp.id]
+            self.routing_algo.topology_last_update = time.time()
         except KeyError:
             pass
 
@@ -104,6 +106,7 @@ class Routing(app_manager.RyuApp):
         dst_port = Port(port = event.link.dst, peer = event.link.src)
         self._update_port_link(src_port.dpid, src_port)
         self._update_port_link(dst_port.dpid, dst_port)
+        self.routing_algo.topology_last_update = time.time()
 
     def _delete_link(self, port):
         try:
@@ -127,6 +130,7 @@ class Routing(app_manager.RyuApp):
 
         self._delete_link(event.link.src)
         self._delete_link(event.link.dst)
+        self.routing_algo.topology_last_update = time.time()
 
 
     @set_ev_cls(topology.event.EventPortAdd)
@@ -134,6 +138,7 @@ class Routing(app_manager.RyuApp):
         port = Port(event.port)
         switch = self.dpid_to_switch[port.dpid]
         switch.ports[port.port_no] = port
+        self.routing_algo.topology_last_update = time.time()
 
     @set_ev_cls(topology.event.EventPortDelete)
     def port_delete_handler(self, event):
@@ -141,6 +146,7 @@ class Routing(app_manager.RyuApp):
         try:
             switch = self.dpid_to_switch[port.dpid]
             del switch.ports[port.port_no]
+            self.routing_algo.topology_last_update = time.time()
         except KeyError:
             pass
 
@@ -175,6 +181,7 @@ class Routing(app_manager.RyuApp):
                 print 'cost:', p.cost
 
         switch.update_from_config(self.switch_cfg)
+        self.routing_algo.topology_last_update = time.time()
 
     def find_packet(self, pkt, target):
         for packet in pkt.protocols:

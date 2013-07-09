@@ -1,3 +1,4 @@
+import time
 
 class Algorithm(object):
     '''
@@ -5,6 +6,7 @@ class Algorithm(object):
     '''
     def __init__(self, dpid_to_switch):
         self.dpid_to_switch = dpid_to_switch
+        self.topology_last_update = time.time()
 
     def find_route(self, src, dst):
         '''
@@ -94,12 +96,12 @@ class Dijkstra(Algorithm):
     def __init__(self, *args, **kwargs):
         super(Dijkstra, self).__init__(*args, **kwargs)
         self.path = {}  # path[(src, dest)] = [list of path from src to dest]
-        self.need_recalculate = False
+        self.route_last_update = time.time()
 
     def find_route(self, src, dst):
-        if self.need_recalculate:
+        if self.route_last_update < self.topology_last_update:
             self.path = {}
-            self.need_recalculate = False
+            self.route_last_update = time.time()
 
         try:
             path = self.path[src, dst]
