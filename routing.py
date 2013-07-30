@@ -138,6 +138,7 @@ class Routing(app_manager.RyuApp):
         port = Port(event.port)
         switch = self.dpid_to_switch[port.dpid]
         switch.ports[port.port_no] = port
+        switch.update_from_config(self.switch_cfg)
         self.routing_algo.topology_last_update = time.time()
 
     @set_ev_cls(topology.event.EventPortDelete)
@@ -757,7 +758,7 @@ class Routing(app_manager.RyuApp):
                 dst_switch = self.dpid_to_switch[reply.dpid]
             elif reply.switch_name:
                 dst_switch = self.name_to_switch(reply.switch_name)
-                print dst_switch
+                print 'dest switch replied from B:', dst_switch
             else:
                 print 'dropped because dst_switch == None'
                 self.drop_pkt(msg)
