@@ -42,7 +42,7 @@ class TapDevice(object):
 
     def read(self, size=2048):
         # note that size is the maximum size to read
-        return packetBytes = os.read(self.tap, size)
+        return os.read(self.tap, size)
 
     def write(self, packetBytes):
         bytesWritten = os.write(self.tap, packetBytes)
