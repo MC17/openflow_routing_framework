@@ -35,16 +35,16 @@ class TapDevice(object):
         subprocess.check_call(command)
 
     def setIPv6Address(self, ipv6, prefixLength):
-        command = ['ip', '-6', 'addr', 'add', ipv6 + '/' + prefixLength,
+        command = ['ip', '-6', 'addr', 'add', ipv6 + '/' + str(prefixLength),
                    'dev', self.name]
         print 'config IPv6 address:', command
         subprocess.check_call(command)
 
     def read(self, size=2048):
         # note that size is the maximum size to read
-        return os.read(self.tap, size)
+        return os.read(self.tap.fileno(), size)
 
     def write(self, packetBytes):
-        bytesWritten = os.write(self.tap, packetBytes)
+        bytesWritten = os.write(self.tap.fileno(), packetBytes)
         if bytesWritten == 0:
             raise WriteError
