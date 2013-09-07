@@ -8,7 +8,7 @@ from ryu.controller.handler import ( MAIN_DISPATCHER,
 from ryu.controller import ofp_event
 from ryu import topology
 from ryu.ofproto import ofproto_v1_0, nx_match
-from ryu.ofproto import ether
+from ryu.ofproto import ether, inet
 from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6 )
 from ryu.lib import mac
 
@@ -17,6 +17,7 @@ from util import read_cfg
 import algorithm
 import convert
 import dest_event
+import BGP4
 
 import ipdb
 
@@ -62,7 +63,44 @@ class Routing(app_manager.RyuApp):
 
     def _pre_install_flow_entry(self, switch):
         # 'switch' is a Switch object
-        pass
+    
+        # add flow entry for BGP, both IPv4 and IPv6
+        rule4 = nx_match.ClsRule()
+        rule4.set_dl_type(ether.ETH_TYPE_IP)
+        rule4.set_nw_proto(inet.IPPROTO_TCP)
+        rule4.set_tp_dst(BGP4.BGP_TCP_PORT)
+
+        rule6 = nx_match.ClsRule()
+        rule6.set_dl_type(ether.ETH_TYPE_IPV6)
+        rule6.set_nw_proto(inet.IPPROTO_TCP)
+        rule6.set_tp_dst(BGP4.BGP_TCP_PORT)
+        
+        actions = []
+        actions.append(switch.dp.ofproto_parser.OFPActionOutput(
+                            port = ofproto_v1_0.OFPP_CONTROLLER,
+                            # XXX need check if 0 means "whole packet",
+                            # or should assign 65535(0xffff) here?
+                            max_len = 0))
+
+        msg4 = switch.dp.ofproto_parser.NXTFlowMod(
+                datapath = switch.dp, cookie = 0,
+                command = switch.dp.ofproto.OFPFC_MODIFY,
+                # 0 timeout means no timeout
+                idle_timeout = 0, hard_timeout = 0,
+                out_port = ofproto_v1_0.OFPP_CONTROLLER,
+                rule = rule4, actions = actions)
+
+        msg6 = switch.dp.ofproto_parser.NXTFlowMod(
+                datapath = switch.dp, cookie = 0,
+                command = switch.dp.ofproto.OFPFC_MODIFY,
+                idle_timeout = 0, hard_timeout = 0,
+                out_port = ofproto_v1_0.OFPP_CONTROLLER,
+                rule = rule6, actions = actions)
+
+        switch.dp.send_msg(msg4)
+        switch.dp.send_msg(msg6)
+
+        print 'pre-installed flow entry'
 
     @set_ev_cls(topology.event.EventSwitchEnter)
     def switch_enter_handler(self, event):
