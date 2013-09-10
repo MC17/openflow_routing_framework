@@ -6,7 +6,6 @@ from ryu.lib import hub
 from ryu.lib.hub import StreamServer
 from eventlet.queue import Queue
 import eventlet
-import contextlib
 import greenlet
 import traceback
 
