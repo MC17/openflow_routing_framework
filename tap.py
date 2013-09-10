@@ -32,7 +32,7 @@ class TapDevice(object):
         ifr = struct.pack('16sH', name, TapDevice.IFF_TAP | TapDevice.IFF_NO_PI)
         fcntl.ioctl(self.tap, TapDevice.TUNSETIFF, ifr)
 
-    def setIPv4Address(self, ipv4='192.168.1.101', prefixLength):
+    def setIPv4Address(self, ipv4='192.168.1.101', prefixLength = 24):
         command = ['ifconfig', self.name, ipv4 + '/' + str(prefixLength)]
         print 'config IPv4 address:', command
         subprocess.check_call(command)
