@@ -537,10 +537,6 @@ class Routing(app_manager.RyuApp):
         switch = switch_list[0]
         next_switch = switch_list[1]
         outport_no = switch.peer_to_local_port[next_switch]
-        if _4or6 == 4:
-            ip_layer = self.find_packet(pkt, 'ipv4')
-        else:
-            ip_layer = self.find_packet(pkt, 'ipv6')
 
         outport = switch.ports[outport_no]
         mac_src = outport.hw_addr
