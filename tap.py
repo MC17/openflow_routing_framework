@@ -3,6 +3,9 @@ import os
 import struct
 import subprocess
 
+# use as a global variable
+device = None
+
 class WriteError(Exception):
     pass
 
@@ -29,15 +32,21 @@ class TapDevice(object):
         ifr = struct.pack('16sH', name, TapDevice.IFF_TAP | TapDevice.IFF_NO_PI)
         fcntl.ioctl(self.tap, TapDevice.TUNSETIFF, ifr)
 
-    def setIPv4Address(self, ipv4='192.168.1.101', netmask='255.255.255.0'):
-        command = ['ifconfig', self.name, ipv4, 'netmask', netmask]
+    def setIPv4Address(self, ipv4='192.168.1.101', prefixLength):
+        command = ['ifconfig', self.name, ipv4 + '/' + str(prefixLength)]
         print 'config IPv4 address:', command
         subprocess.check_call(command)
+        self.__turnUpInterface()
 
     def setIPv6Address(self, ipv6, prefixLength):
         command = ['ip', '-6', 'addr', 'add', ipv6 + '/' + str(prefixLength),
                    'dev', self.name]
         print 'config IPv6 address:', command
+        subprocess.check_call(command)
+        self.__turnUpInterface()
+
+    def __turnUpInterface(self):
+        command = ['ifconfig', self.name, 'up']
         subprocess.check_call(command)
 
     def read(self, size=2048):

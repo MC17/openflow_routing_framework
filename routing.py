@@ -18,6 +18,7 @@ import algorithm
 import convert
 import dest_event
 import BGP4
+import tap
 
 import ipdb
 
@@ -34,6 +35,9 @@ class Routing(app_manager.RyuApp):
                                     # maintains all the switches
 
         self.routing_algo = algorithm.Dijkstra(self.dpid_to_switch)
+
+        if tap.device == None:
+            tap.device = tap.TapDevice()
 
         self.filepath = 'routing.config'
 

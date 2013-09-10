@@ -283,7 +283,7 @@ class Connection(object):
     def send_open_msg(self):
         open_reply = BGP4.bgp4_open(version = 4,my_as = Server.local_as,
                             hold_time = self.hold_time,
-                            bgp_identifier = Server.local_ip4,
+                            bgp_identifier = Server.local_ipv4,
                             data = Server.capabilities)
         bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_OPEN, data = open_reply)
         p = packet.Packet()

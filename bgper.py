@@ -11,6 +11,7 @@ import convert
 from bgp_server import Server, Connection
 import BGP4
 from util import read_bgp_config
+import tap
 
 import ipdb
 
@@ -44,8 +45,18 @@ class BGPer(app_manager.RyuApp):
         except:
             print "File %s Parse Error" % self.filepath
 
-        Server.local_ip4 = self.bgp_cfg.get('local_ip4')
-        Server.local_ip6 = self.bgp_cfg.get('local_ip6')
+        local_ipv4 = self.bgp_cfg.get('local_ipv4')
+        ipv4_prefix_len = self.bgp_cfg.get('ipv4_prefix_len')
+        local_ipv6 = self.bgp_cfg.get('local_ipv6')
+        ipv6_prefix_len = self.bgp_cfg.get('ipv6_prefix_len')
+
+        if tap.device == None:
+            tap.device = tap.TapDevice()
+        tap.device.setIPv4Address(local_ipv4, ipv4_prefix_len)
+        tap.device.setIPv6Address(local_ipv6, ipv6_prefix_len)
+
+        Server.local_ipv4 = local_ipv4
+        Server.local_ipv6 = local_ipv6
         Server.local_as = int(self.bgp_cfg.get('local_as'))
         Server.capabilities = []
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
