@@ -774,6 +774,18 @@ class Routing(app_manager.RyuApp):
             except:
                 pass
 
+        # forward BGP packets
+        try:
+            tcp_layer = self.find_packet(pkt, 'tcp')
+            if tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
+                tap.device.write(pkt.data)
+                return
+        except tap.WriteError:
+            print 'Tap device write error!'
+            return
+        except:
+            pass
+
         dst_switch, dst_port_no = self.find_switch_of_network(
                                         protocol_pkt.dst, _4or6)
 
@@ -806,7 +818,7 @@ class Routing(app_manager.RyuApp):
                 dst_port_no = None
                 for num, p in dst_switch.ports.iteritems():
                     if p.gateway.border:
-                        # assume only one outport
+                        # assume only one outport in one switch
                         dst_port_no = p.port_no
                         break
                 if dst_port_no:
