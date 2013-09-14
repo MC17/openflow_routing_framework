@@ -9,7 +9,7 @@ from ryu.controller import ofp_event
 from ryu import topology
 from ryu.ofproto import ofproto_v1_0, nx_match
 from ryu.ofproto import ether, inet
-from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6 )
+from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6)
 from ryu.lib import mac
 
 from switch import Port, Switch
@@ -48,6 +48,7 @@ class Routing(app_manager.RyuApp):
             print "File %s Parse Error" % self.filepath
 
         #hub.spawn(self._test)
+        hub.spawn(self.forward_from_tap)
 
     def _test(self):
         while True:
@@ -64,6 +65,34 @@ class Routing(app_manager.RyuApp):
 
         print '-------------------'
 
+    def forward_from_tap(self):
+        def get_switch_and_port(config,dpid_to_switch):
+            # in switch_cfg, s is switch name, p is port number
+            for s in config.keys():
+                for p in config[s].keys():
+                    if config[s][p].border == True:
+                        for dpid in dpid_to_switch.keys():
+                            if dpid_to_switch[dpid].name == s:
+                                return dpid_to_switch[dpid], p
+            return None, None
+
+        out_switch = None
+        out_port_no = None
+        while True:
+            data = self.tap.read()
+            if out_switch == None or out_port_no == None:
+                out_switch, out_port_no = get_switch_and_port(
+                                                self.switch_cfg,
+                                                self.dpid_to_switch)
+            if out_switch and out_port_no:
+                actions = []
+                actions.append(out_switch.dp.ofproto_parser.OFPActionOutput(
+                                                                outport_no))
+                out = switch.dp.ofproto_parser.OFPPacketOut(
+                        datapath = switch.dp, buffer_id = -1,
+                        in_port = ofproto_v1_0.OFPP_NONE,
+                        actions = actions, data = data)
+                switch.dp.send_msg(out)
 
     def _pre_install_flow_entry(self, switch):
         # 'switch' is a Switch object
