@@ -79,7 +79,7 @@ class Routing(app_manager.RyuApp):
         out_switch = None
         out_port_no = None
         while True:
-            data = self.tap.read()
+            data = tap.device.read()
             if out_switch == None or out_port_no == None:
                 out_switch, out_port_no = get_switch_and_port(
                                                 self.switch_cfg,
