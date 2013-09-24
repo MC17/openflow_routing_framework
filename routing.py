@@ -1,4 +1,5 @@
 import time
+from eventlet import tpool
 
 from ryu.base import app_manager
 from ryu.lib import hub
@@ -48,7 +49,8 @@ class Routing(app_manager.RyuApp):
             print "File %s Parse Error" % self.filepath
 
         #hub.spawn(self._test)
-        hub.spawn(self.forward_from_tap)
+        #hub.spawn(self.forward_from_tap)
+        tpool.execute(self.forward_from_tap)
 
     def _test(self):
         while True:
