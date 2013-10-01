@@ -1,5 +1,8 @@
 import time
-from eventlet import tpool
+from eventlet import patcher
+from eventlet import greenio
+native_threading = patcher.original("threading")
+native_queue = patcher.original("Queue")
 
 from ryu.base import app_manager
 from ryu.lib import hub
@@ -67,7 +70,68 @@ class Routing(app_manager.RyuApp):
 
         print '-------------------'
 
+    def _init_pipe(self):
+    '''
+        The pipe is for synchronization, the queue is used for store
+        the packets
+    '''
+        self._event_queue = native_queue.Queue()
+        r_pipe, w_pipe = os.pipe()
+        self._event_notify_send = greenio.GreenPipe(w_pipe, 'wb', 0)
+        self._event_notify_recv = greenio.GreenPipe(r_pipe, 'rb', 0)
+
+    def _init_events(self):
+    '''
+        Init the event subsystem. Codes learned from OpenStack 
+        nova/virt/libvirt/driver.py
+        since they meet the same problem that an eventlet green thread
+        must corperate with a native C-based library.
+        
+        - Apache License v2.0?
+        - OK.
+    '''
+        self._init_pipe()
+        print 'Starting native event thread'
+        event_thread = native_threading.Thread(target = self.read_from_tap)
+        event_thread.setDaemon(True)
+        event_thread.start()
+        print 'Starting green dispatch thread'
+        dispatch_thread = eventlet.spawn(self.dispatch_thread)
+
+    def dispatch_thread(self):
+        while True:
+            # Wait to be notified that there're some events pending in queue
+            try:
+                _c = self._event_notify_recv.read(1)
+                assert _c
+            except ValueError:
+                return # will be raised when pipe is closed
+
+            # try processing as many events as possible
+            while not self._event_queue.empty():
+                try:
+                    event = self._event_queue.get(block = False)
+                    ## forward the packets, now only print
+                    print 'New packet in queue'
+                except native_queue.Empty:
+                    pass
+
+    def read_from_tap(self):
+    '''
+        Note that this method runs in a native thread
+    '''
+        while True:
+            data = tap.device.read()
+            self._event_queue.put(data)
+            # notify the green dispatch_thread
+            c = ' '.encode()
+            self._event_notify_send.write(c)
+            self._event_notify_send.flush()
+
     def forward_from_tap(self):
+    '''
+        Note that this method runs in a native thread
+    '''
         def get_switch_and_port(config,dpid_to_switch):
             # in switch_cfg, s is switch name, p is port number
             for s in config.keys():
