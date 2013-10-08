@@ -1,4 +1,5 @@
 import time
+import os
 from eventlet import patcher
 from eventlet import greenio
 native_threading = patcher.original("threading")
@@ -70,17 +71,17 @@ class Routing(app_manager.RyuApp):
         print '-------------------'
 
     def _init_pipe(self):
-    '''
+        '''
         The pipe is for synchronization, the queue is used for store
         the packets
-    '''
+        '''
         self._event_queue = native_queue.Queue()
         r_pipe, w_pipe = os.pipe()
         self._event_notify_send = greenio.GreenPipe(w_pipe, 'wb', 0)
         self._event_notify_recv = greenio.GreenPipe(r_pipe, 'rb', 0)
 
     def _init_events(self):
-    '''
+        '''
         Init the event subsystem. Codes learned from OpenStack 
         nova/virt/libvirt/driver.py
         since we meet the same problem that an eventlet green thread
@@ -88,14 +89,14 @@ class Routing(app_manager.RyuApp):
         
         - Apache License v2.0?
         - OK.
-    '''
+        '''
         self._init_pipe()
         print 'Starting native event thread'
         event_thread = native_threading.Thread(target = self.read_from_tap)
         event_thread.setDaemon(True)
         event_thread.start()
         print 'Starting green dispatch thread'
-        dispatch_thread = eventlet.spawn(self.dispatch_thread)
+        dispatch_thread = hub.spawn(self.dispatch_thread)
 
     def dispatch_thread(self):
         
@@ -145,9 +146,9 @@ class Routing(app_manager.RyuApp):
                     pass
 
     def read_from_tap(self):
-    '''
+        '''
         Note that this method runs in a native thread
-    '''
+        '''
         while True:
             data = tap.device.read()
             self._event_queue.put(data)
