@@ -91,9 +91,9 @@ class BGPer(app_manager.RyuApp):
     @set_ev_cls(dest_event.EventDestinationRequest)
     def destination_request_handler(self, event):
         if event._4or6 == 4:
-            print 'dst address:', convert.ipv4_to_str(event.dest_addr)
+            print 'dst address:', event.dest_addr
         else:
-            print 'dst address:', convert.bin_to_ipv6(event.dest_addr)
+            print 'dst address:', event.dest_addr
 
         longest_match = None
         for entry in Server.route_table:
