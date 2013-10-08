@@ -161,17 +161,10 @@ class Routing(app_manager.RyuApp):
         # 'switch' is a Switch object
     
         # add flow entry for BGP, both IPv4 and IPv6
-        # since ryu has bugs in IPv4 NXM, we use OFPFlowMod here
-
-        wildcards = ofproto_v1_0.OFPFW_ALL # all wildcards
-        # and clear DL_TYPE, NW_PROTO, TP_DST
-        # meaning that DL_TYPE, NW_PROTO, TP_DST exact match
-        wildcards &= ~ofproto_v1_0.OFPFW_DL_TYPE
-        wildcards &= ~ofproto_v1_0.OFPFW_NW_PROTO
-        wildcards &= ~ofproto_v1_0.OFPFW_TP_DST
-        rule4 = switch.dp.ofproto_parser.OFPMatch(
-                wildcards = wildcards, dl_type = ether.ETH_TYPE_IP,
-                nw_proto = inet.IPPROTO_TCP, tp_dst = BGP4.BGP_TCP_PORT)
+        rule4 = nx_match.ClsRule()
+        rule4.set_dl_type(ether.ETH_TYPE_IP)
+        rule4.set_nw_proto(inet.IPPROTO_TCP)
+        rule4.set_tp_dst(BGP4.BGP_TCP_PORT)
 
         rule6 = nx_match.ClsRule()
         rule6.set_dl_type(ether.ETH_TYPE_IPV6)
@@ -185,13 +178,13 @@ class Routing(app_manager.RyuApp):
                             # 65535(0xffff) is the max len could be assigned
                             max_len = 65535))
 
-        msg4 = switch.dp.ofproto_parser.OFPFlowMod(
-                datapath = switch.dp, match = rule4, cookie = 0,
+        msg4 = switch.dp.ofproto_parser.NXTFlowMod(
+                datapath = switch.dp, cookie = 0,
                 command = switch.dp.ofproto.OFPFC_MODIFY,
                 # 0 timeout means no timeout
                 idle_timeout = 0, hard_timeout = 0,
                 out_port = ofproto_v1_0.OFPP_CONTROLLER,
-                actions = actions)
+                rule = rule4, actions = actions)
 
         msg6 = switch.dp.ofproto_parser.NXTFlowMod(
                 datapath = switch.dp, cookie = 0,
