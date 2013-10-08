@@ -17,11 +17,13 @@ import ipdb
 
 def equal(dest_addr, route_entry):
     if route_entry._4or6 == 4:
-        print convert.bin_to_ipv4(dest_addr), convert.bin_to_ipv4(route_entry.ip)
+        print dest_addr, convert.bin_to_ipv4(route_entry.ip)
+        dest_addr = convert.ipv4_to_int(dest_addr)
         return convert.ipv4_in_network(dest_addr, route_entry.ip, \
                                        route_entry.prefix_len)
     elif route_entry._4or6 == 6:
-        print convert.bin_to_ipv6(dest_addr), convert.bin_to_ipv6(route_entry.ip)
+        print dest_addr, convert.bin_to_ipv6(route_entry.ip)
+        dest_addr = convert.ipv6_to_bin(dest_addr)
         return convert.ipv6_in_network(dest_addr, route_entry.ip, \
                                        route_entry.prefix_len)
     else:
