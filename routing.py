@@ -52,8 +52,7 @@ class Routing(app_manager.RyuApp):
             print "File %s Parse Error" % self.filepath
 
         #hub.spawn(self._test)
-        #hub.spawn(self.forward_from_tap)
-        tpool.execute(self.forward_from_tap)
+        self._init_events()
 
     def _test(self):
         while True:
@@ -84,7 +83,7 @@ class Routing(app_manager.RyuApp):
     '''
         Init the event subsystem. Codes learned from OpenStack 
         nova/virt/libvirt/driver.py
-        since they meet the same problem that an eventlet green thread
+        since we meet the same problem that an eventlet green thread
         must corperate with a native C-based library.
         
         - Apache License v2.0?
@@ -99,6 +98,21 @@ class Routing(app_manager.RyuApp):
         dispatch_thread = eventlet.spawn(self.dispatch_thread)
 
     def dispatch_thread(self):
+        
+        # nested method to find the switch and port of the "router"
+        def get_switch_and_port(config,dpid_to_switch):
+            # in switch_cfg, s is switch name, p is port number
+            for s in config.keys():
+                for p in config[s].keys():
+                    if config[s][p].border == True:
+                        for dpid in dpid_to_switch.keys():
+                            if dpid_to_switch[dpid].name == s:
+                                return dpid_to_switch[dpid], p
+            return None, None
+
+        out_switch = None
+        out_port_no = None
+
         while True:
             # Wait to be notified that there're some events pending in queue
             try:
@@ -110,9 +124,23 @@ class Routing(app_manager.RyuApp):
             # try processing as many events as possible
             while not self._event_queue.empty():
                 try:
-                    event = self._event_queue.get(block = False)
-                    ## forward the packets, now only print
+                    data = self._event_queue.get(block = False)
                     print 'New packet in queue'
+                    if out_switch == None or out_port_no == None:
+                        out_switch, out_port_no = get_switch_and_port(
+                                                self.switch_cfg,
+                                                self.dpid_to_switch)
+                    if out_switch and out_port_no:
+                        actions = []
+                        actions.append(
+                                out_switch.dp.ofproto_parser.OFPActionOutput(
+                                                                outport_no))
+                        out = switch.dp.ofproto_parser.OFPPacketOut(
+                                datapath = switch.dp, buffer_id = -1,
+                                in_port = ofproto_v1_0.OFPP_NONE,
+                                actions = actions, data = data)
+                        switch.dp.send_msg(out)
+
                 except native_queue.Empty:
                     pass
 
@@ -127,38 +155,6 @@ class Routing(app_manager.RyuApp):
             c = ' '.encode()
             self._event_notify_send.write(c)
             self._event_notify_send.flush()
-
-    def forward_from_tap(self):
-    '''
-        Note that this method runs in a native thread
-    '''
-        def get_switch_and_port(config,dpid_to_switch):
-            # in switch_cfg, s is switch name, p is port number
-            for s in config.keys():
-                for p in config[s].keys():
-                    if config[s][p].border == True:
-                        for dpid in dpid_to_switch.keys():
-                            if dpid_to_switch[dpid].name == s:
-                                return dpid_to_switch[dpid], p
-            return None, None
-
-        out_switch = None
-        out_port_no = None
-        while True:
-            data = tap.device.read()
-            if out_switch == None or out_port_no == None:
-                out_switch, out_port_no = get_switch_and_port(
-                                                self.switch_cfg,
-                                                self.dpid_to_switch)
-            if out_switch and out_port_no:
-                actions = []
-                actions.append(out_switch.dp.ofproto_parser.OFPActionOutput(
-                                                                outport_no))
-                out = switch.dp.ofproto_parser.OFPPacketOut(
-                        datapath = switch.dp, buffer_id = -1,
-                        in_port = ofproto_v1_0.OFPP_NONE,
-                        actions = actions, data = data)
-                switch.dp.send_msg(out)
 
     def _pre_install_flow_entry(self, switch):
         # 'switch' is a Switch object
