@@ -882,9 +882,9 @@ class Routing(app_manager.RyuApp):
                                         protocol_pkt.dst, _4or6)
 
         if _4or6 == 4:
-            print 'dst address:', convert.ipv4_to_str(protocol_pkt.dst)
+            print 'dst address:', protocol_pkt.dst
         else:
-            print 'dst address:', convert.bin_to_ipv6(protocol_pkt.dst)
+            print 'dst address:', protocol_pkt.dst
         print 'destination switch, port_no', dst_switch, dst_port_no
 
         if dst_port_no == ofproto_v1_0.OFPP_LOCAL:
