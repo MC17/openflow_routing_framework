@@ -131,16 +131,18 @@ class Routing(app_manager.RyuApp):
                         out_switch, out_port_no = get_switch_and_port(
                                                 self.switch_cfg,
                                                 self.dpid_to_switch)
+                        print 'out_switch, out_port', out_switch, out_port_no
                     if out_switch and out_port_no:
                         actions = []
                         actions.append(
                                 out_switch.dp.ofproto_parser.OFPActionOutput(
-                                                                outport_no))
-                        out = switch.dp.ofproto_parser.OFPPacketOut(
-                                datapath = switch.dp, buffer_id = -1,
+                                                                out_port_no))
+                        out = out_switch.dp.ofproto_parser.OFPPacketOut(
+                                datapath = out_switch.dp,
+                                buffer_id = 0xffffffff, # -1 in 32bit
                                 in_port = ofproto_v1_0.OFPP_NONE,
                                 actions = actions, data = data)
-                        switch.dp.send_msg(out)
+                        out_switch.dp.send_msg(out)
 
                 except native_queue.Empty:
                     pass
