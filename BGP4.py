@@ -1,5 +1,6 @@
 import struct
-import convert
+import netaddr
+from ryu.lib import addrconv
 from ryu.lib.packet import packet_base
 
 BGP_TCP_PORT = 179
@@ -7,7 +8,7 @@ BGP_TCP_PORT = 179
 BGP4_OPEN = 1
 BGP4_UPDATE = 2
 BGP4_NOTIFICATION = 3
-BGP4_KEEPALIVE = 4 #keepalive message only contain a header  
+BGP4_KEEPALIVE = 4 # keepalive message only contain a header  
 #BGP4_ROUTE_REFRESH = 5
 
 AFI_IPV4 = 1
@@ -168,7 +169,7 @@ class bgp4_open(object):
         self.version = version
         self.my_as = my_as
         self.hold_time = hold_time
-        self.bgp_identifier = convert.ipv4_to_int(bgp_identifier)
+        self.bgp_identifier = netaddr.IPAddress(bgp_identifier)
         self.opt_para_len = opt_para_len
         self.type_ = type_
         self.para_len = para_len
@@ -180,7 +181,7 @@ class bgp4_open(object):
                         struct.unpack_from(cls._PACK_STR, buf, offset)
         offset += cls._MIN_LEN
 
-        bgp_identifier = convert.ipv4_to_str(bgp_identifier)
+        bgp_identifier = netaddr.IPAddress(bgp_identifier)
         '''
             There're two types of packet structure:
             1)
@@ -239,7 +240,7 @@ class bgp4_open(object):
         two_octect_as = 23456 if self.my_as > 65535 else self.my_as
         hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, 
                         two_octect_as, self.hold_time,
-                        self.bgp_identifier, self.opt_para_len))
+                        self.bgp_identifier.value, self.opt_para_len))
 
         if self.data != []:
             hdr += bytearray(struct.pack('!BB', self.type_, self.para_len))
@@ -378,21 +379,12 @@ class support_4_octets_as_num(object):
 
 class NLRI(object):
     def __init__(self, length, prefix, _4or6 = 4):
+        self.network = netaddr.IPNetwork(prefix)
+        self.network.prefixlen = length
         self.length = length
-        self.prefix = prefix
-        # the human readable string
-        if _4or6 == 4:
-            self.string = convert.bin_to_ipv4(self.prefix)
-        elif _4or6 == 6:
-            self.string = convert.bin_to_ipv6(self.prefix)
         self._4or6 = _4or6
     def __str__(self):
-        if self._4or6 == 4:
-            return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, self.string)
-        else:
-            return '<NLRI prefix length = %s, prefix = %s>' % \
-                   (self.length, self.string)
+        return '<NLRI prefix %s>' % str(self.network)
     @classmethod
     def parser(cls, buf, offset, length, _4or6):
         """
@@ -417,22 +409,21 @@ class NLRI(object):
             nlri = None
             if _4or6 == 4:
                 prefix_arg_list += (0,) * (4 - prefix_bytes)
-                prefix = struct.pack('!4B', *prefix_arg_list)
+                prefix_arg_list = [str(x) for x in prefix_arg_list]
+                prefix = '.'.join(prefix_arg_list)
                 nlri = NLRI(prefix_len, prefix, 4)
             elif _4or6 == 6:
                 prefix_arg_list += (0,) * (16 - prefix_bytes)
-                prefix = struct.pack('!16B', *prefix_arg_list)
-                nlri = NLRI(prefix_len, prefix, 16)
+                prefix_arg_list = [str(x) for x in prefix_arg_list]
+                prefix = ':'.join(prefix_arg_list)
+                nlri = NLRI(prefix_len, prefix, 6)
             entries.append(nlri)
         return entries
 
     def serialize(self):
         hdr = bytearray(struct.pack('!B', self.length))
         prefix_bytes = (self.length + 7) / 8
-        #print 'length:', prefix_bytes
-        #print 'prefix bytes', self.prefix[0:prefix_bytes]
-        hdr += bytearray(struct.pack('!%ss' % prefix_bytes,
-                                     self.prefix[0:prefix_bytes]))
+        hdr += bytearray(self.network.network.packed[0:prefix_bytes])
         return hdr
 
 @bgp4.register_bgp4_type(BGP4_UPDATE)
@@ -525,12 +516,13 @@ class bgp4_update(object):
         hdr = bytearray(struct.pack('!H', self.wd_routes_len))
         if 0 != self.wd_routes_len:
             len_ = 0
-            for wd_len,wd_route in self.wd_routes:
+            for wd_route in self.wd_routes:
+                wd_len = wd_route.length
                 hdr += bytearray(struct.pack('!B', wd_len))
                 len_ += 1
                 if wd_len != 0:
-                    wd_route_int = convert.ipv4_to_int(wd_route)
-                    wd_route_str = bytearray(struct.pack('!I',wd_route_int))
+                    wd_route_str = bytearray(
+                                wd_route.network.network.packed)
                     a = wd_len/8
                     if 0 != wd_len%8:
                         a += 1
@@ -725,6 +717,7 @@ class next_hop(object):
         self.code = code
         self.length = length
         self._next_hop = _next_hop
+        self.next_hop = netaddr.IPAddress(_next_hop)
 
     @classmethod
     def parser(cls, buf, offset):
@@ -733,12 +726,13 @@ class next_hop(object):
         return msg
 
     def serialize(self):
-        hdr = bytearray(struct.pack(self._PACK_STR + 'I', self.flag, self.code, self.length, self._next_hop))
+        hdr = bytearray(struct.pack(self._PACK_STR + 'I', self.flag,
+                        self.code, self.length, self._next_hop))
         return hdr
 
     def __str__(self):
         ans = 'Next hop: '
-        ans += convert.ipv4_to_str(self._next_hop)
+        ans += str(self.next_hop)
         return '<%s>' % ans
 
 @bgp4_update.register_path_attributes_type(bgp4_update._MULTI_EXIT_DISC)
@@ -849,13 +843,14 @@ class mp_reach_nlri(object):
         if next_hop_len == 4:
             (temp_next_hop,) = struct.unpack_from('!I', buf, offset)
             offset += 4
-            next_hop.append(convert.ipv4_to_str(temp_next_hop))
+            next_hop.append(netaddr.IPAddress(temp_next_hop))
         else:
             if next_hop_len/16 != 0:
                 for i in range(next_hop_len/16):
                     (temp_next_hop,) = struct.unpack_from('!16s', buf, offset)
                     offset += 16
-                    next_hop.append(convert.bin_to_ipv6(temp_next_hop))
+                    next_hop.append(netaddr.IPAddress(
+                                addrconv.ipv6.bin_to_text(temp_next_hop)))
 
         if len(buf) > offset:
             # as SNPA is obselete, jump over this field
@@ -888,9 +883,8 @@ class mp_reach_nlri(object):
         hdr += bytearray(struct.pack('!B', self.next_hop_len))
         self.length += 1
         for i in self.next_hop:
-            hdr += bytearray(convert.ipv6_to_bin(i))
+            hdr += bytearray(i.packed)
         self.length += self.next_hop_len
-
 
         hdr += bytearray(struct.pack('!B', self.reserved))
         self.length += 1
