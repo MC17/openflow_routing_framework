@@ -9,16 +9,16 @@ def read_cfg(filepath):
         line = line.split()
         if '#' in line or line == []:
             continue
-        switch_name, port_name, port_num, gw_ipv4, ipv4_prefix_len, \
+        switch_name, port_name, port_no, gw_ipv4, ipv4_prefix_len, \
         gw_ipv6, ipv6_prefix_len, border = line
-        port_num = int(port_num)
+        port_no = int(port_no)
         ipv4_prefix_len = int(ipv4_prefix_len)
         ipv6_prefix_len = int(ipv6_prefix_len)
         border = True if border == 'True' else False
         if switch_name not in ans:
             ans[switch_name] = {}
-        ans[switch_name][port_num] = Gateway(port_name, gw_ipv4, gw_ipv6,
-                                    port_num, ipv4_prefix_len, ipv6_prefix_len,
+        ans[switch_name][port_no] = Gateway(port_name, gw_ipv4, gw_ipv6,
+                                    port_no, ipv4_prefix_len, ipv6_prefix_len,
                                     border)
     return ans
 
