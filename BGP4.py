@@ -414,7 +414,10 @@ class NLRI(object):
                 nlri = NLRI(prefix_len, prefix, 4)
             elif _4or6 == 6:
                 prefix_arg_list += (0,) * (16 - prefix_bytes)
-                prefix_arg_list = [str(x) for x in prefix_arg_list]
+                packed_prefix = struct.pack('!16B', *prefix_arg_list)
+                prefix_arg_list = struct.unpack('!8H', packed_prefix)
+                # hex format without '0x'
+                prefix_arg_list = [format(x, 'x') for x in prefix_arg_list]
                 prefix = ':'.join(prefix_arg_list)
                 nlri = NLRI(prefix_len, prefix, 6)
             entries.append(nlri)
