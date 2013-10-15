@@ -1,3 +1,5 @@
+import netaddr
+
 from ryu.topology import switches
 from ryu.topology.switches import Port as Port_type
 from ryu.lib.dpid import dpid_to_str
@@ -22,7 +24,7 @@ class Port(switches.Port):
             self._state = port._state
 
             self.port_no = port.port_no
-            self.hw_addr = port.hw_addr
+            self.hw_addr = netaddr.EUI(port.hw_addr)
             self.name = port.name
 
             # below are our new variables
@@ -36,7 +38,7 @@ class Port(switches.Port):
             self._state = port.state
 
             self.port_no = port.port_no
-            self.hw_addr = port.hw_addr
+            self.hw_addr = netaddr.EUI(port.hw_addr)
             self.name = port.name
         else:
             print type(port)
@@ -45,7 +47,7 @@ class Port(switches.Port):
             raise AttributeError
 
         self.gateway = None
-        self.cost = float('inf')
+        self.cost = float('inf') # infinite
 
     def to_dict(self):
         d = super(Port, self).to_dict()
