@@ -819,7 +819,7 @@ class Routing(app_manager.RyuApp):
                 if _4or6 == 4:
                     if port.gateway and convert.ipv4_in_network(dst_addr,
                                     port.gateway.gw_ip,
-                                    port.gateway.prefixlen):
+                                    port.gateway.gw_ip.prefixlen):
                         if dst_addr == port.gateway.gw_ip:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL
@@ -827,7 +827,7 @@ class Routing(app_manager.RyuApp):
                 else:
                     if port.gateway and convert.ipv6_in_network(dst_addr,
                                     port.gateway.gw_ipv6,
-                                    port.gateway.ipv6prefixlen):
+                                    port.gateway.gw_ipv6.prefixlen):
                         if dst_addr == port.gateway.gw_ipv6:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL

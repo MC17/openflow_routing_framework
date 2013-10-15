@@ -198,12 +198,12 @@ class Connection(object):
 
         if msg.wd_routes:
             for i in msg.wd_routes:
-                entry = route_entry.BGPEntry(i.prefix, i.length, 4)
+                entry = route_entry.BGPEntry(i.network, i.length, 4)
                 withdraw_entries.append(entry)
 
         if msg.nlri:
             for i in msg.nlri:
-                entry = route_entry.BGPEntry(i.prefix, i.length, 4)
+                entry = route_entry.BGPEntry(i.network, i.length, 4)
                 advert_entries.append(entry)
         
         attributes = route_entry.Attributes()
@@ -224,13 +224,13 @@ class Connection(object):
                 attributes.next_hop = i.next_hop
                 if i.nlri:
                     for j in i.nlri:
-                        entry = route_entry.BGPEntry(j.prefix, j.length, _4or6)
+                        entry = route_entry.BGPEntry(j.network, j.length, _4or6)
                         advert_entries.append(entry)
             elif i.code == BGP4.bgp4_update._MP_UNREACH_NLRI:
                 _4or6 = self.__check_AFI(i.addr_family)
                 if i.wd_routes:
                     for j in i.wd_routes:
-                        entry = route_entry.BGPEntry(j.prefix, j.length, _4or6)
+                        entry = route_entry.BGPEntry(j.network, j.length, _4or6)
                         withdraw_entries.append(entry)
         self.__add_route(advert_entries, attributes)
         self.__remove_route(withdraw_entries)
