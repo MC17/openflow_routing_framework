@@ -5,6 +5,7 @@ from eventlet import greenio
 native_threading = patcher.original("threading")
 native_queue = patcher.original("Queue")
 
+import netaddr
 from ryu.base import app_manager
 from ryu.lib import hub
 from ryu.controller.handler import set_ev_cls
@@ -20,7 +21,6 @@ from ryu.lib import mac
 from switch import Port, Switch
 from util import read_cfg
 import algorithm
-import convert
 import dest_event
 import BGP4
 import tap
@@ -332,7 +332,7 @@ class Routing(app_manager.RyuApp):
         in_port_no = msg.in_port
         gateway = switch.ports[in_port_no].gateway
         pop_list = []
-        if gateway and gateway.gw_ip == arp_pkt.dst_ip:
+        if gateway and gateway.gw_ip == netaddr.IPAddress(arp_pkt.dst_ip):
             self._remember_mac_addr(switch, pkt, 4)
             for i in xrange(len(switch.msg_buffer)):
                 msg, pkt, outport_no, _4or6 = switch.msg_buffer[i]
@@ -370,11 +370,11 @@ class Routing(app_manager.RyuApp):
         req_src_ip = arp_pkt.src_ip
 
         port = switch.ports[in_port_no]
-        if port.gateway and req_dst_ip != port.gateway.gw_ip:
+        if port.gateway and netaddr.IPAddress(req_dst_ip) != port.gateway.gw_ip:
             return
 
         datapath = msg.datapath
-        reply_src_mac = port.hw_addr
+        reply_src_mac = str(port.hw_addr)
         ether_layer = self.find_packet(pkt, 'ethernet')
 
         e = ethernet.ethernet(dst = ether_layer.src, src = reply_src_mac,
@@ -393,8 +393,7 @@ class Routing(app_manager.RyuApp):
                 actions = [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data = p.data)
 
-        print 'ARP replied:', convert.haddr_to_str(reply_src_mac), \
-                convert.ipv4_to_str(req_dst_ip)
+        print 'ARP replied:', reply_src_mac, req_dst_ip
 
     def _handle_icmp(self, msg, pkt, icmp_pkt):
         '''
@@ -557,11 +556,11 @@ class Routing(app_manager.RyuApp):
                 ip_layer.src = ip_layer.src_ip
                 print 'ARP from ARP'
 
-            print 'ARP entry:', convert.haddr_to_str(ether_layer.src),
-            print convert.ipv4_to_str(ip_layer.src)
+            print 'ARP entry:', ether_layer.src, ip_layer.src
         else:
             ip_layer = self.find_packet(packet, 'ipv6')
-        switch.ip_to_mac[ip_layer.src] = (ether_layer.src, time_now)
+        switch.ip_to_mac[netaddr.IPAddress(ip_layer.src)] = \
+                            (netaddr.EUI(ether_layer.src), time_now)
 
 
     def deploy_flow_entry(self, msg, pkt, switch_list, _4or6):
@@ -655,9 +654,10 @@ class Routing(app_manager.RyuApp):
 
     def _send_arp_request(self, datapath, outport_no, dst_ip):
         src_mac_addr = \
-            self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr
+            str(self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr)
         src_ip = \
-            self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ip
+            str(self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ip)
+        dst_ip = str(dst_ip)
         p = packet.Packet()
         e = ethernet.ethernet(dst = mac.BROADCAST,
             src = src_mac_addr, ethertype = ether.ETH_TYPE_ARP)
@@ -690,27 +690,32 @@ class Routing(app_manager.RyuApp):
 
             Ref: RFC 2464, RFC 2373
         '''
-        args = convert.bin_to_ipv6_arg_list(ipv6_addr)
+        args = struct.unpack('!8H', ipv6_addr.packed)
 
         arg_6 = args[6] & 0x00ff
         arg_7head = ('%04x' % args[7])[0:2]
         arg_7tail = ('%04x' % args[7])[2:]
         ethernet_str = '33:33:ff:' + str(arg_6) + ':' + arg_7head + ':' + \
                        arg_7tail
-        ethernet_addr = convert.haddr_to_bin(ethernet_str)
+        ethernet_addr = netaddr.EUI(ethernet_str)
 
         args[6] = args[6] | 0xff00
         args[0:6] = [0xff02,0,0,0,0,1]
-        ip_addr = convert.arg_list_to_ipv6_bin(args)
+        args = [format(x, 'x') for x in args]
+        args_str = ':'.join(args)
+        ip_addr = netaddr.IPAddress(args_str)
         return ethernet_addr, ip_addr
 
     def _send_icmp_NS(self, datapath, outport_no, dst_ip):
         src_mac_addr = \
-            self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr
+            str(self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr)
         src_ip = \
-            self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ipv6
+            str(self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ipv6)
         p = packet.Packet()
         dst_mac, dst_ip_multicast = self._generate_dst_for_NS(dst_ip)
+        dst_mac = str(dst_mac)
+        dst_ip_multicast = str(dst_ip_multicast)
+        dst_ip = str(dst_ip)
         e = ethernet.ethernet(dst = dst_mac, src = src_mac_addr,
                 ethertype = ether.ETH_TYPE_IPV6)
         ip6 = ipv6.ipv6(version = 6, traffic_class = 0, flow_label = 0,
@@ -745,20 +750,21 @@ class Routing(app_manager.RyuApp):
 
         dp = msg.datapath
         switch = self.dpid_to_switch[dp.id]
+        ipDestAddr = netaddr.IPAddress(ip_layer.dst)
 
         print 'last_switch_out:', switch, outport_no
         try:
             # TODO introduce ARP timeout
-            mac_addr = switch.ip_to_mac[ip_layer.dst][0]
+            mac_addr = switch.ip_to_mac[ipDestAddr][0]
         except KeyError:
             # don't know MAC address yet, send ARP/ICMP message
             # and temporarily store the packets
             if _4or6 == 4:
                 self._send_arp_request(msg.datapath, outport_no,
-                                        ip_layer.dst)
+                                        ipDestAddr)
             else:
                 self._send_icmp_NS(msg.datapath, outport_no,
-                                    ip_layer.dst)
+                                    ipDestAddr)
             switch.msg_buffer.append( (msg, pkt, outport_no, _4or6) )
             return False
 
@@ -774,18 +780,18 @@ class Routing(app_manager.RyuApp):
                     wildcards = wildcards, in_port = 0,
                     dl_src = 0, dl_dst = 0, dl_vlan = 0, dl_vlan_pcp = 0,
                     dl_type = ether.ETH_TYPE_IP, nw_tos = 0, nw_proto = 0,
-                    nw_src = 0, nw_dst = ip_layer.dst, tp_src = 0,
+                    nw_src = 0, nw_dst = ipDestAddr.value, tp_src = 0,
                     tp_dst = 0)
         else:
             rule = nx_match.ClsRule()
             rule.set_dl_type(ether.ETH_TYPE_IPV6)
-            rule.set_ipv6_dst(convert.bin_to_ipv6_arg_list(ip_layer.dst))
+            rule.set_ipv6_dst(struct.unpack('!8H', ipDestAddr.packed))
 
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
                         switch.ports[outport_no].hw_addr))
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
-                        mac_addr))
+                        mac_addr.value))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
         if _4or6 == 4:
