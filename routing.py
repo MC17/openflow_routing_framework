@@ -105,7 +105,7 @@ class Routing(app_manager.RyuApp):
             # in switch_cfg, s is switch name, p is port number
             for s in config.keys():
                 for p in config[s].keys():
-                    if config[s][p].border == True:
+                    if config[s][p].isBorder== True:
                         for dpid in dpid_to_switch.keys():
                             if dpid_to_switch[dpid].name == s:
                                 return dpid_to_switch[dpid], p
@@ -911,7 +911,7 @@ class Routing(app_manager.RyuApp):
             if src_switch == dst_switch:
                 dst_port_no = None
                 for num, p in dst_switch.ports.iteritems():
-                    if p.gateway.border:
+                    if p.gateway.isBorder:
                         # assume only one outport in one switch
                         dst_port_no = p.port_no
                         break
