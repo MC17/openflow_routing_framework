@@ -1,13 +1,11 @@
 import contextlib
+import netaddr
 
 from ryu.base import app_manager
 from ryu.lib import hub
 from ryu.controller.handler import set_ev_cls
-from ryu.controller.handler import (HANDSHAKE_DISPATCHER, MAIN_DISPATCHER,
-                                    CONFIG_DISPATCHER, DEAD_DISPATCHER)
 
 import dest_event
-import convert
 from bgp_server import Server, Connection
 import BGP4
 from util import read_bgp_config
@@ -16,18 +14,9 @@ import tap
 import ipdb
 
 def equal(dest_addr, route_entry):
-    if route_entry._4or6 == 4:
-        print dest_addr, convert.bin_to_ipv4(route_entry.ip)
-        dest_addr = convert.ipv4_to_int(dest_addr)
-        return convert.ipv4_in_network(dest_addr, route_entry.ip, \
-                                       route_entry.prefix_len)
-    elif route_entry._4or6 == 6:
-        print dest_addr, convert.bin_to_ipv6(route_entry.ip)
-        dest_addr = convert.ipv6_to_bin(dest_addr)
-        return convert.ipv6_in_network(dest_addr, route_entry.ip, \
-                                       route_entry.prefix_len)
-    else:
-        return False
+    dest_addr = netaddr.IPAddress(dest_addr)
+    network = netaddr.IPNetwork(route_entry.ip)
+    return dest_addr in network
 
 class BGPer(app_manager.RyuApp):
     """
@@ -84,8 +73,7 @@ class BGPer(app_manager.RyuApp):
             #    print k, v
             for i in Server.route_table:
                 print i._4or6
-                print convert.bin_to_ipv4(i.ip) if i._4or6 == 4 else \
-                        convert.bin_to_ipv6(i.ip)
+                print i.ip
                 print i.attributes.as_path
 
             hub.sleep(3)

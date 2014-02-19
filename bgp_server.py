@@ -12,7 +12,6 @@ import traceback
 from ryu.lib.packet import packet, ethernet
 
 import BGP4
-import convert
 import route_entry
 
 
@@ -166,7 +165,7 @@ class Connection(object):
         print '4/6:', self._4or6
         print 'peer_as:', self.peer_as
         print 'hold_time:', self.hold_time
-        print 'peer_id:', convert.ipv4_to_str(self.peer_id)
+        print 'peer_id:', self.peer_id
         print 'capability:', self.peer_capabilities
 
         self.send_open_msg()

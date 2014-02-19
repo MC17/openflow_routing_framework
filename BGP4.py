@@ -236,7 +236,7 @@ class bgp4_open(object):
         # real(maybe 4 octets) AS number is in support_4_octets_as_num 
         # capability.
         # Note that the "23456" isn't just a random number, it's 
-        # a commom standard
+        # defined in RFC4893
         two_octect_as = 23456 if self.my_as > 65535 else self.my_as
         hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, 
                         two_octect_as, self.hold_time,

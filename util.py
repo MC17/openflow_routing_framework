@@ -32,7 +32,7 @@ def read_bgp_config(filepath):
         for option in options:
             dict_[option] = config.get(section, option)
     except IOError as e:
-        print "I/O error({0}):{1}".formate(e.errno,e.strerror)
+        print "I/O error({0}):{1}".format(e.errno,e.strerror)
     except ParsingError as e:
         print e
     return dict_
