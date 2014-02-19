@@ -790,7 +790,7 @@ class Routing(app_manager.RyuApp):
 
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                        switch.ports[outport_no].hw_addr.value)
+                        switch.ports[outport_no].hw_addr.value))
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
                         mac_addr.value))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
