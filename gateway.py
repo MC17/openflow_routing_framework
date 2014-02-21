@@ -1,5 +1,6 @@
 import netaddr
 
+
 class Gateway(object):
     def __init__(
             self, name='', ip='', ipv6='', port_no='',

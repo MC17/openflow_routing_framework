@@ -5,12 +5,13 @@ from eventlet import greenio
 native_threading = patcher.original("threading")
 native_queue = patcher.original("Queue")
 
+import struct
 import netaddr
 from ryu.base import app_manager
 from ryu.lib import hub
 from ryu.controller.handler import set_ev_cls
-from ryu.controller.handler import ( MAIN_DISPATCHER,
-                                    CONFIG_DISPATCHER )
+from ryu.controller.handler import (MAIN_DISPATCHER,
+                                    CONFIG_DISPATCHER)
 from ryu.controller import ofp_event
 from ryu import topology
 from ryu.ofproto import ofproto_v1_0, nx_match
@@ -27,6 +28,7 @@ import tap
 
 import ipdb
 
+
 class Routing(app_manager.RyuApp):
     ARP_TIMEOUT = 600    # in seconds
 
@@ -41,7 +43,7 @@ class Routing(app_manager.RyuApp):
 
         self.routing_algo = algorithm.Dijkstra(self.dpid_to_switch)
 
-        if tap.device == None:
+        if tap.device is None:
             tap.device = tap.TapDevice()
 
         self.filepath = 'routing.config'
@@ -71,25 +73,25 @@ class Routing(app_manager.RyuApp):
         print '-------------------'
 
     def _init_pipe(self):
-        '''
+        """
         The pipe is for synchronization, the queue is used for store
         the packets
-        '''
+        """
         self._event_queue = native_queue.Queue()
         r_pipe, w_pipe = os.pipe()
         self._event_notify_send = greenio.GreenPipe(w_pipe, 'wb', 0)
         self._event_notify_recv = greenio.GreenPipe(r_pipe, 'rb', 0)
 
     def _init_events(self):
-        '''
-        Init the event subsystem. Codes learned from OpenStack 
+        """
+        Init the event subsystem. Codes learned from OpenStack
         nova/virt/libvirt/driver.py
         since we meet the same problem that an eventlet green thread
-        must corperate with a native C-based library.
-        
+        must cooperate with a native C-based library.
+
         - Apache License v2.0?
         - OK.
-        '''
+        """
         self._init_pipe()
         print 'Starting native event thread'
         event_thread = native_threading.Thread(target = self.read_from_tap)
@@ -101,11 +103,11 @@ class Routing(app_manager.RyuApp):
     def dispatch_thread(self):
         
         # nested method to find the switch and port of the "router"
-        def get_switch_and_port(config,dpid_to_switch):
+        def get_switch_and_port(config, dpid_to_switch):
             # in switch_cfg, s is switch name, p is port number
             for s in config.keys():
                 for p in config[s].keys():
-                    if config[s][p].isBorder== True:
+                    if config[s][p].isBorder == True:
                         for dpid in dpid_to_switch.keys():
                             if dpid_to_switch[dpid].name == s:
                                 return dpid_to_switch[dpid], p
@@ -120,14 +122,14 @@ class Routing(app_manager.RyuApp):
                 _c = self._event_notify_recv.read(1)
                 assert _c
             except ValueError:
-                return # will be raised when pipe is closed
+                return  # will be raised when pipe is closed
 
             # try processing as many events as possible
             while not self._event_queue.empty():
                 try:
                     data = self._event_queue.get(block = False)
                     print 'New packet in queue'
-                    if out_switch == None or out_port_no == None:
+                    if out_switch is None or out_port_no is None:
                         out_switch, out_port_no = get_switch_and_port(
                                                 self.switch_cfg,
                                                 self.dpid_to_switch)
@@ -139,7 +141,7 @@ class Routing(app_manager.RyuApp):
                                                                 out_port_no))
                         out = out_switch.dp.ofproto_parser.OFPPacketOut(
                                 datapath = out_switch.dp,
-                                buffer_id = 0xffffffff, # -1 in 32bit
+                                buffer_id = 0xffffffff,  # -1 in 32bit
                                 in_port = ofproto_v1_0.OFPP_NONE,
                                 actions = actions, data = data)
                         out_switch.dp.send_msg(out)
@@ -148,9 +150,9 @@ class Routing(app_manager.RyuApp):
                     pass
 
     def read_from_tap(self):
-        '''
+        """
         Note that this method runs in a native thread
-        '''
+        """
         while True:
             data = tap.device.read()
             self._event_queue.put(data)
@@ -221,7 +223,6 @@ class Routing(app_manager.RyuApp):
             self.routing_algo.topology_last_update = time.time()
         except KeyError:
             pass
-
 
     def _update_port_link(self, dpid, port):
         switch = self.dpid_to_switch[dpid]
@@ -298,8 +299,8 @@ class Routing(app_manager.RyuApp):
             switch = self.dpid_to_switch[dpid]
         except KeyError:
             self.dpid_to_switch[dpid] = Switch(event.msg.datapath)
+            switch = self.dpid_to_switch[dpid]
 
-        switch = self.dpid_to_switch[dpid]
         for port_no, port in event.msg.ports.iteritems():
             if port_no not in switch.ports:
                 p = Port(port = port, dp = event.msg.datapath)
@@ -339,13 +340,12 @@ class Routing(app_manager.RyuApp):
                 if self.last_switch_out(msg, pkt, outport_no, _4or6):
                     pop_list.append(i)
 
-            pop_list.sort(reverse = True) # descending order
-            for i in pop_list:            # pop from tail to head
+            pop_list.sort(reverse = True)  # descending order
+            for i in pop_list:             # pop from tail to head
                 switch.msg_buffer.pop(i)
 
-
     def _handle_arp(self, msg, pkt, arp_pkt):
-        '''
+        """
             1)
             handles ARP request from hosts, about their gateways;
             only works in IPv4 since IPv6 uses NDP(ICMPv6);
@@ -354,7 +354,7 @@ class Routing(app_manager.RyuApp):
             2)
             handles ARP reply from hosts, and try to send packets currently
             stored in switch.msg_buffer
-        '''
+        """
         #print 'arp', arp_pkt
 
         if arp_pkt.opcode == arp.ARP_REPLY:
@@ -396,11 +396,11 @@ class Routing(app_manager.RyuApp):
         print 'ARP replied:', reply_src_mac, req_dst_ip
 
     def _handle_icmp(self, msg, pkt, icmp_pkt):
-        '''
+        """
             reply to ICMP_ECHO_REQUEST(i.e. ping);
             may handle other types of ICMP msg in the future;
-            return True if send a responce
-        '''
+            return True if send a response
+        """
         if icmp_pkt.type != icmp.ICMP_ECHO_REQUEST:
             return False
 
@@ -422,18 +422,18 @@ class Routing(app_manager.RyuApp):
         echo_seq = icmp_pkt.data.seq
         echo_data = bytearray(icmp_pkt.data.data)
 
-        icmp_data = icmp.echo(id_=echo_id,seq=echo_seq,data=echo_data)
+        icmp_data = icmp.echo(id_=echo_id, seq=echo_seq, data=echo_data)
 
         #send a echo reply packet
         ether_layer = self.find_packet(pkt, 'ethernet')
         ether_dst = ether_layer.src
         ether_src = str(switch.ports[in_port_no].hw_addr)
-        e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IP)
+        e = ethernet.ethernet(ether_dst, ether_src, ether.ETH_TYPE_IP)
         #csum calculation should be paid attention to
-        i = ipv4.ipv4(version=4,header_length=5,tos=0,total_length=0,
-            identification=0,flags=0x000,offset=0,ttl=64,proto=1,csum=0,
-            src=str(ip_dst),dst=str(ip_src),option=None)
-        ic = icmp.icmp(type_= 0,code=0,csum=0,data=icmp_data)
+        i = ipv4.ipv4(version=4, header_length=5, tos=0, total_length=0,
+            identification=0, flags=0x000, offset=0, ttl=64, proto=1, csum=0,
+            src=str(ip_dst), dst=str(ip_src), option=None)
+        ic = icmp.icmp(type_=0, code=0, csum=0, data=icmp_data)
         p = packet.Packet()
         p.add_protocol(e)
         p.add_protocol(i)
@@ -473,7 +473,7 @@ class Routing(app_manager.RyuApp):
         elif icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
             port = switch.ports[in_port_no]
             if port.gateway and \
-                    netaddr.IPAddress(icmpv6_pkt.data.dst)!=port.gateway.gw_ipv6:
+               netaddr.IPAddress(icmpv6_pkt.data.dst) != port.gateway.gw_ipv6:
                 print 'icmpv6 dest', icmpv6_pkt.data.dst
                 print 'gw_ipv6', str(port.gateway.gw_ipv6)
                 return False
@@ -481,19 +481,19 @@ class Routing(app_manager.RyuApp):
             ether_layer = self.find_packet(pkt, 'ethernet')
             ether_dst = ether_layer.src
             ether_src = str(port.hw_addr)
-            e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IPV6)
+            e = ethernet.ethernet(ether_dst, ether_src, ether.ETH_TYPE_IPV6)
             ic6_data_data = icmpv6.nd_option_la(hw_src=ether_src, data=None)
             #res = 3 or 7
-            ic6_data = icmpv6.nd_neighbor(res=3,dst=icmpv6_pkt.data.dst,
-                    type_=icmpv6.nd_neighbor.ND_OPTION_TLA,length=1,
+            ic6_data = icmpv6.nd_neighbor(res=3, dst=icmpv6_pkt.data.dst,
+                    type_=icmpv6.nd_neighbor.ND_OPTION_TLA, length=1,
                     data=ic6_data_data)
-            ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT,code=0,
-                    csum=0,data=ic6_data)
+            ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT, code=0,
+                                csum=0, data=ic6_data)
             #payload_length
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
-            i6 = ipv6.ipv6(version= 6,traffic_class=0,flow_label=0,
-                    payload_length=32,nxt=58,hop_limit=255,
-                    src=icmpv6_pkt.data.dst,dst=ipv6_pkt.src)
+            i6 = ipv6.ipv6(version= 6, traffic_class=0, flow_label=0,
+                           payload_length=32, nxt=58, hop_limit=255,
+                           src=icmpv6_pkt.data.dst, dst=ipv6_pkt.src)
             p = packet.Packet()
             p.add_protocol(e)
             p.add_protocol(i6)
@@ -523,11 +523,11 @@ class Routing(app_manager.RyuApp):
             ether_src = str(switch.ports[in_port_no].hw_addr)
             e = ethernet.ethernet(ether_dst,ether_src,ether.ETH_TYPE_IPV6)
             ic6_data = icmpv6_pkt.data
-            ic6 = icmpv6.icmpv6(type_=icmpv6.ICMPV6_ECHO_REPLY,code=0,
-                                csum=0,data=ic6_data)
-            i6 = ipv6.ipv6(version=6,traffic_class=0,flow_label=0,
-                            payload_length=64,nxt=58,hop_limit=64,
-                            src=ipv6_pkt.dst,dst=ipv6_pkt.src)
+            ic6 = icmpv6.icmpv6(type_=icmpv6.ICMPV6_ECHO_REPLY, code=0,
+                                csum=0, data=ic6_data)
+            i6 = ipv6.ipv6(version=6, traffic_class=0, flow_label=0,
+                           payload_length=64, nxt=58, hop_limit=64,
+                           src=ipv6_pkt.dst, dst=ipv6_pkt.src)
             p = packet.Packet()
             p.add_protocol(e)
             p.add_protocol(i6)
@@ -544,15 +544,15 @@ class Routing(app_manager.RyuApp):
         return False
 
     def _remember_mac_addr(self, switch, packet, _4or6):
-        '''
-            get ip <-> mac relationship from packets and 
+        """
+            get ip <-> mac relationship from packets and
             store them in dict ip_to_mac
-        '''
+        """
         time_now = time.time()
         ether_layer = self.find_packet(packet, 'ethernet')
         if _4or6 == 4:
             ip_layer = self.find_packet(packet, 'ipv4')
-            if ip_layer == None:
+            if ip_layer is None:
                 ip_layer = self.find_packet(packet, 'arp')
                 ip_layer.src = ip_layer.src_ip
                 print 'ARP from ARP'
@@ -563,11 +563,10 @@ class Routing(app_manager.RyuApp):
         switch.ip_to_mac[netaddr.IPAddress(ip_layer.src)] = \
                             (netaddr.EUI(ether_layer.src), time_now)
 
-
     def deploy_flow_entry(self, msg, pkt, switch_list, _4or6):
-        '''
+        """
             deploy flow entry into switch
-        '''
+        """
         # TODO
         # this method and last_switch_out should be restructured
         length = len(switch_list)
@@ -606,9 +605,9 @@ class Routing(app_manager.RyuApp):
 
             actions = []
             actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                            mac_src.value))
+                           mac_src.value))
             actions.append(dp.ofproto_parser.OFPActionSetDlDst(
-                            mac_dst.value))
+                           mac_dst.value))
             actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
             if _4or6 == 4:
@@ -652,7 +651,6 @@ class Routing(app_manager.RyuApp):
 
         switch.dp.send_msg(out)
 
-
     def _send_arp_request(self, datapath, outport_no, dst_ip):
         src_mac_addr = \
             str(self.dpid_to_switch[datapath.id].ports[outport_no].hw_addr)
@@ -674,14 +672,14 @@ class Routing(app_manager.RyuApp):
             data = p.data)
 
     def _generate_dst_for_NS(self, ipv6_addr):
-        '''
+        """
             ICMPv6 neighbor solicitation destination addresses in ethernet
             and IP layer are multicast addresses, and could be generated as:
-            
+
             IPv6:
                 ff02::1:ffXX:XXXX
             where XX is the last 24 bits of the target IPv6 address
-            
+
             ethernet:
                 33:33:XX:XX:XX:XX
             where XX is the last 32 bits of the IPv6 multicast address,
@@ -690,7 +688,7 @@ class Routing(app_manager.RyuApp):
                 33:33:ff:XX:XX:XX
 
             Ref: RFC 2464, RFC 2373
-        '''
+        """
         args = struct.unpack('!8H', ipv6_addr.packed)
 
         arg_6 = args[6] & 0x00ff
@@ -700,8 +698,8 @@ class Routing(app_manager.RyuApp):
                        arg_7tail
         ethernet_addr = netaddr.EUI(ethernet_str)
 
-        args[6] = args[6] | 0xff00
-        args[0:6] = [0xff02,0,0,0,0,1]
+        args[6] |= 0xff00
+        args[0:6] = [0xff02, 0, 0, 0, 0, 1]
         args = [format(x, 'x') for x in args]
         args_str = ':'.join(args)
         ip_addr = netaddr.IPAddress(args_str)
@@ -742,7 +740,6 @@ class Routing(app_manager.RyuApp):
             actions = [datapath.ofproto_parser.OFPActionOutput(outport_no)],
             data = p.data)
 
-
     def last_switch_out(self, msg, pkt, outport_no, _4or6):
         if _4or6 == 4:
             ip_layer = self.find_packet(pkt, 'ipv4')
@@ -762,10 +759,10 @@ class Routing(app_manager.RyuApp):
             # and temporarily store the packets
             if _4or6 == 4:
                 self._send_arp_request(msg.datapath, outport_no,
-                                        ipDestAddr)
+                                       ipDestAddr)
             else:
                 self._send_icmp_NS(msg.datapath, outport_no,
-                                    ipDestAddr)
+                                   ipDestAddr)
             switch.msg_buffer.append( (msg, pkt, outport_no, _4or6) )
             return False
 
@@ -819,7 +816,6 @@ class Routing(app_manager.RyuApp):
         dp.send_msg(out)
         return True
 
-
     def find_switch_of_network(self, dst_addr, _4or6):
         for dpid, switch in self.dpid_to_switch.iteritems():
             for port_no, port in switch.ports.iteritems():
@@ -863,7 +859,7 @@ class Routing(app_manager.RyuApp):
                     return
             except:
                 pass
-        else: # _4or6 == 6
+        else:  # _4or6 == 6
             try:
                 icmpv6_layer = self.find_packet(pkt, 'icmpv6')
                 if self._handle_icmpv6(msg, pkt, icmpv6_layer):
@@ -896,9 +892,9 @@ class Routing(app_manager.RyuApp):
             # should be handled by ICMP/ARP etc.
             return
 
-        if dst_switch == None:
+        if dst_switch is None:
             # can't find destination in this domain
-            # raise an event to `moudle B`
+            # raise an event to `module B`
             req = dest_event.EventDestinationRequest(
                     netaddr.IPAddress(protocol_pkt.dst), _4or6)
             reply = self.send_request(req)

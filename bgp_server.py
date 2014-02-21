@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import socket
 import struct
 from ryu.lib import hub
 from ryu.lib.hub import StreamServer
@@ -9,7 +8,7 @@ import eventlet
 import greenlet
 import traceback
 
-from ryu.lib.packet import packet, ethernet
+from ryu.lib.packet import packet
 
 import BGP4
 import route_entry
@@ -37,7 +36,8 @@ class Server(object):
 
         print "Starting server..."
         server.serve_forever()
-  
+
+
 def _deactivate(method):
     def deactivate(self):
         try:
@@ -50,6 +50,7 @@ def _deactivate(method):
         finally:
             self.is_active = False
     return deactivate   
+
 
 class Connection(object):
     def __init__(self, socket, address):
@@ -103,10 +104,10 @@ class Connection(object):
             eventlet.sleep(0)
                     
     def _exact_receive(self, required_len):
-        '''
+        """
             receive exact size of data from socket
             returns empty string if socket closed/error
-        '''
+        """
         buf = bytearray()
         while len(buf) < required_len:
             more_data = self.socket.recv(required_len - len(buf))
@@ -280,7 +281,7 @@ class Connection(object):
     #  
     
     def send_open_msg(self):
-        open_reply = BGP4.bgp4_open(version = 4,my_as = Server.local_as,
+        open_reply = BGP4.bgp4_open(version = 4, my_as = Server.local_as,
                             hold_time = self.hold_time,
                             bgp_identifier = Server.local_ipv4,
                             data = Server.capabilities)
@@ -289,7 +290,6 @@ class Connection(object):
         p.add_protocol(bgp4_reply)
         p.serialize()
         self.send(p.data)
-
 
     def send_keepalive_msg(self):
         keepalive = BGP4.bgp4(type_ = BGP4.BGP4_KEEPALIVE, data = None)
@@ -312,8 +312,8 @@ class Connection(object):
         print '** Sending route_table'
         for i in Server.route_table:
             path_attr = []
-            # 0 is a valid origin number, campare with None
-            if i.attributes.origin != None:
+            # 0 is a valid origin number, compare with None
+            if i.attributes.origin is not None:
                 origin_msg = BGP4.origin(value = i.attributes.origin)
                 path_attr.append(origin_msg)
             if i.attributes.multi_exit_disc:

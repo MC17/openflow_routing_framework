@@ -6,9 +6,10 @@ from ryu.lib.dpid import dpid_to_str
 from ryu.lib.port_no import port_no_to_str
 from ryu.ofproto.ofproto_v1_0_parser import OFPPhyPort
 
+
 class Port(switches.Port):
     def __init__(self, port, peer = None, dp = None):
-        # if the conbination is port + peer, then
+        # if the combination is port + peer, then
         # port and peer are two switches.Port objects;
         # if port + dp, then
         # port is ofp_phy_port and dp is the datapath of this port
@@ -87,7 +88,7 @@ class Switch(switches.Switch):
         self.ip_to_mac = {}
 
     def update_from_config(self, config):
-        if self.name == None:
+        if self.name is None:
             return
 
         try:

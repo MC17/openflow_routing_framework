@@ -22,6 +22,7 @@ def read_cfg(filepath):
                                     border)
     return ans
 
+
 def read_bgp_config(filepath):
     dict_ = {}
     config = ConfigParser()

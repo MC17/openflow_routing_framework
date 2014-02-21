@@ -2,9 +2,9 @@ from ryu.controller import event
 
 
 class EventDestinationRequest(event.EventRequestBase):
-    '''
+    """
         request for the border switch by destination address
-    '''
+    """
     def __init__(self, dest_addr = None, _4or6 = 4):
         super(EventDestinationRequest, self).__init__()
         self.dst = 'bgper'

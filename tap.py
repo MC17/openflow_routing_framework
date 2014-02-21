@@ -6,8 +6,10 @@ import subprocess
 # use as a global variable
 device = None
 
+
 class WriteError(Exception):
     pass
+
 
 class TapDevice(object):
 

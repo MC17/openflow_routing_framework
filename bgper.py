@@ -13,10 +13,12 @@ import tap
 
 import ipdb
 
+
 def equal(dest_addr, route_entry):
     dest_addr = netaddr.IPAddress(dest_addr)
     network = netaddr.IPNetwork(route_entry.ip)
     return dest_addr in network
+
 
 class BGPer(app_manager.RyuApp):
     """
@@ -41,7 +43,7 @@ class BGPer(app_manager.RyuApp):
         local_ipv6 = self.bgp_cfg.get('local_ipv6')
         ipv6_prefix_len = self.bgp_cfg.get('ipv6_prefix_len')
 
-        if tap.device == None:
+        if tap.device is None:
             tap.device = tap.TapDevice()
         tap.device.setIPv4Address(local_ipv4, ipv4_prefix_len)
         tap.device.setIPv6Address(local_ipv6, ipv6_prefix_len)
@@ -51,13 +53,13 @@ class BGPer(app_manager.RyuApp):
         Server.local_as = int(self.bgp_cfg.get('local_as'))
         Server.capabilities = []
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
-                            length = 4, addr_family = 1,res = 0x00,
-                            sub_addr_family = 1))
+                                length = 4, addr_family = 1, res = 0x00,
+                                sub_addr_family = 1))
         Server.capabilities.append(BGP4.multi_protocol_extension(code = 1,
-                            length = 4, addr_family = 2,res = 0x00,
-                            sub_addr_family = 1))
-        Server.capabilities.append(BGP4.route_refresh(2,0))
-        Server.capabilities.append(BGP4.support_4_octets_as_num(65,4,
+                                length = 4, addr_family = 2, res = 0x00,
+                                sub_addr_family = 1))
+        Server.capabilities.append(BGP4.route_refresh(2, 0))
+        Server.capabilities.append(BGP4.support_4_octets_as_num(65, 4,
                                                         Server.local_as))
 
         Server.route_table = []
@@ -89,17 +91,18 @@ class BGPer(app_manager.RyuApp):
         for entry in Server.route_table:
             if event._4or6 == entry._4or6:
                 if equal(event.dest_addr, entry):
-                    if longest_match == None or \
+                    if longest_match is None or \
                             entry.prefix_len > longest_match.prefix_len:
                         longest_match = entry
 
         if longest_match:
             name = self.bgp_cfg.get('border_switch')
-            reply = dest_event.EventDestinationReply(switch_name = name)
+            reply = dest_event.EventDestinationReply(switch_name=name)
         else:
             reply = dest_event.EventDestinationReply()
 
         self.reply_to_request(event, reply)
+
 
 def handler(socket, address):
     print 'connect from ', address

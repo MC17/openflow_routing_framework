@@ -8,13 +8,14 @@ BGP_TCP_PORT = 179
 BGP4_OPEN = 1
 BGP4_UPDATE = 2
 BGP4_NOTIFICATION = 3
-BGP4_KEEPALIVE = 4 # keepalive message only contain a header  
+BGP4_KEEPALIVE = 4   # keepalive message only contain a header
 #BGP4_ROUTE_REFRESH = 5
 
 AFI_IPV4 = 1
 AFI_IPV6 = 2
 SAFI_UNICAST = 1
 SAFI_MULTICAST = 2
+
 
 class bgp4(packet_base.PacketBase):
     """
@@ -75,7 +76,7 @@ class bgp4(packet_base.PacketBase):
     def serialize(self, payload, prev):
         marker_ = None
         if self.marker == 1:
-            marker_ = struct.pack('!4I', *[((self.marker) << 32) - 1] * 4)
+            marker_ = struct.pack('!4I', *[(self.marker << 32) - 1] * 4)
 
         if marker_:
             hdr = bytearray(struct.pack(self._PACK_STR, marker_, self.length, self.type_))
@@ -163,7 +164,7 @@ class bgp4_open(object):
 
         return _register_capability_advertisement_type
 
-    # using capabilities adverstisement in it's optional parameters' field
+    # using capabilities advertisement in it's optional parameters' field
     def __init__(self, version, my_as, hold_time, bgp_identifier,
                  opt_para_len=0, type_=2, para_len=0, data=[]):
         self.version = version
@@ -203,7 +204,7 @@ class bgp4_open(object):
                 Optional Parameter: Capability
                     Capability
 
-            The second one is obselete but should be supported,
+            The second one is obsolete but should be supported,
             as defined in RFC 5492
         '''
         if opt_para_len >= 2:
@@ -237,9 +238,9 @@ class bgp4_open(object):
         # capability.
         # Note that the "23456" isn't just a random number, it's 
         # defined in RFC4893
-        two_octect_as = 23456 if self.my_as > 65535 else self.my_as
+        two_octet_as = 23456 if self.my_as > 65535 else self.my_as
         hdr = bytearray(struct.pack(bgp4_open._PACK_STR, self.version, 
-                        two_octect_as, self.hold_time,
+                        two_octet_as, self.hold_time,
                         self.bgp_identifier.value, self.opt_para_len))
 
         if self.data != []:
@@ -383,6 +384,7 @@ class NLRI(object):
         self.network.prefixlen = length
         self.length = length
         self._4or6 = _4or6
+
     def __str__(self):
         return '<NLRI prefix %s>' % str(self.network)
     @classmethod
@@ -525,7 +527,7 @@ class bgp4_update(object):
                 len_ += 1
                 if wd_len != 0:
                     wd_route_str = bytearray(
-                                wd_route.network.network.packed)
+                                    wd_route.network.network.packed)
                     a = wd_len/8
                     if 0 != wd_len%8:
                         a += 1
@@ -546,7 +548,8 @@ class bgp4_update(object):
                 if cls:
                     hdr += attr.serialize()
                     self.path_attr_len += attr._MIN_LEN
-                    if attr.__dict__.has_key('length'):
+                    #if attr.__dict__.has_key('length'):
+                    if 'length' in attr.__dict__:
                         self.path_attr_len += attr.length
             struct.pack_into('!H', hdr, 2 + self.wd_routes_len, self.path_attr_len)
         #print '## serialize path_attr success'
@@ -581,7 +584,7 @@ class origin(object):
     _PACK_STR = '!BBB'
     _MIN_LEN = struct.calcsize(_PACK_STR)
 
-    def __init__(self,flag = 0x40, code = bgp4_update._ORIGIN,
+    def __init__(self, flag = 0x40, code = bgp4_update._ORIGIN,
                  length = 1, value = 1):
         
         self.flag = flag
@@ -644,18 +647,18 @@ class as_path(object):
         self.as_len = as_len
         self.as_values = as_values
 
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             self._PACK_STR = '!BBH'
             self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
             self._PACK_STR = '!BBB'
-            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
         (flag, code) = struct.unpack_from('!BB', buf, offset)
 
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             cls._PACK_STR = '!BBH'
             cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
@@ -671,7 +674,6 @@ class as_path(object):
             as_values.append(as_value)
         msg = cls(flag, code, length, as_type, as_len, as_values)
         return msg
-
 
     def serialize(self):
         hdr = bytearray(
@@ -817,18 +819,18 @@ class mp_reach_nlri(object):
         self.reserved = 0
         self.nlri = nlri
 
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             self._PACK_STR = '!BBH'
             self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
             self._PACK_STR = '!BBB'
-            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
         (flag, code) = struct.unpack_from('!BB', buf, offset)
 
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             cls._PACK_STR = '!BBH'
             cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
@@ -856,7 +858,7 @@ class mp_reach_nlri(object):
                                 addrconv.ipv6.bin_to_text(temp_next_hop)))
 
         if len(buf) > offset:
-            # as SNPA is obselete, jump over this field
+            # as SNPA is obsolete, jump over this field
             (num_of_snpas,) = struct.unpack_from('!B', buf, offset)
             offset += 1
             if num_of_snpas != 0:
@@ -934,23 +936,23 @@ class mp_unreach_nlri(object):
         self.sub_addr_family = sub_addr_family
         self.wd_routes = wd_routes
 
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             self._PACK_STR = '!BBH'
             self._MIN_LEN = struct.calcsize(self._PACK_STR)
         else:
             self._PACK_STR = '!BBB'
-            self._MIN_LEN = _MIN_LEN = struct.calcsize(self._PACK_STR)
+            self._MIN_LEN = struct.calcsize(self._PACK_STR)
 
     @classmethod
     def parser(cls, buf, offset):
 
         (flag, code) = struct.unpack_from('!BB', buf, offset)
-        if ((flag & 0x10) == 0x10):
+        if (flag & 0x10) == 0x10:
             cls._PACK_STR = '!BBH'
             cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
         else:
             cls._PACK_STR = '!BBB'
-            cls._MIN_LEN = _MIN_LEN = struct.calcsize(cls._PACK_STR)
+            cls._MIN_LEN = struct.calcsize(cls._PACK_STR)
 
         (flag, code, length, addr_family, sub_addr_family) = struct.unpack_from(cls._PACK_STR + 'BB', buf, offset)
         offset += cls._MIN_LEN + 3
@@ -1020,7 +1022,6 @@ class bgp4_notification(object):
         if len(buf) > offset:
             msg.data = buf[offset:]
         return msg
-
 
     def serialize(self):
         hdr = bytearray(struct.pack(self._PACK_STR, self.err_code, self.err_subcode))

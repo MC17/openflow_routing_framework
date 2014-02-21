@@ -1,5 +1,6 @@
 import time
 
+
 class Algorithm(object):
     '''
         algorithm base class
@@ -32,11 +33,11 @@ class Dijkstra(Algorithm):
             self.switch_to_position[switch] = len(self.heap) - 1
             self._shift_to_root(len(self.heap) - 1)
 
-        def _shift_to_root(self, positon):
-            while positon > 0 and \
-                    self.heap[positon][1] < self.heap[(positon-1)/2][1]:
-                self._exchange(positon, (positon-1)/2)
-                positon = (positon-1) / 2
+        def _shift_to_root(self, position):
+            while position > 0 and \
+                    self.heap[position][1] < self.heap[(position-1)/2][1]:
+                self._exchange(position, (position-1)/2)
+                position = (position-1) / 2
 
         def pop(self):
             length = len(self.heap)
@@ -54,43 +55,42 @@ class Dijkstra(Algorithm):
                         
             return ans
 
-        def _shift_to_leaf(self, positon):
+        def _shift_to_leaf(self, position):
             length = len(self.heap)
-            while positon*2+1 < length:
-                if positon*2+2 < length:
-                    if self.heap[positon*2+1][1] < self.heap[positon*2+2][1]:
-                        if self.heap[positon][1] > self.heap[positon*2+1][1]:
-                            self._exchange(positon, positon*2+1)
-                            #print 'exchange', positon, positon*2+1
-                            positon = positon * 2 + 1
+            while position*2+1 < length:
+                if position*2+2 < length:
+                    if self.heap[position*2+1][1] < self.heap[position*2+2][1]:
+                        if self.heap[position][1] > self.heap[position*2+1][1]:
+                            self._exchange(position, position*2+1)
+                            #print 'exchange', position, position*2+1
+                            position = position * 2 + 1
                         else:
                             break
                     else:
-                        if self.heap[positon][1] > self.heap[positon*2+2][1]:
-                            self._exchange(positon, positon*2+2)
-                            #print 'exchange', positon, positon*2+2
-                            positon = positon * 2 + 2
+                        if self.heap[position][1] > self.heap[position*2+2][1]:
+                            self._exchange(position, position*2+2)
+                            #print 'exchange', position, position*2+2
+                            position = position * 2 + 2
                         else:
                             break
                 else:
-                    if self.heap[positon][1] > self.heap[positon*2+1][1]:
-                        self._exchange(positon, positon*2+1)
-                        positon = positon * 2 + 1
+                    if self.heap[position][1] > self.heap[position*2+1][1]:
+                        self._exchange(position, position*2+1)
+                        position = position * 2 + 1
                     else:
                         break
 
         def _exchange(self, x, y):
-            # x and y are positons in self.heap
+            # x and y are positions in self.heap
             self.heap[x], self.heap[y] = self.heap[y], self.heap[x]
             self.switch_to_position[self.heap[x][0]] = x
             self.switch_to_position[self.heap[y][0]] = y
 
         def update(self, switch, distance):
-            positon = self.switch_to_position[switch]
-            self.heap[positon] = (switch, distance)
-            self._shift_to_leaf(positon)
-            self._shift_to_root(positon)
-
+            position = self.switch_to_position[switch]
+            self.heap[position] = (switch, distance)
+            self._shift_to_leaf(position)
+            self._shift_to_root(position)
 
 
     def __init__(self, *args, **kwargs):
@@ -122,7 +122,7 @@ class Dijkstra(Algorithm):
             pq.insert(switch, distance[switch])
         while True:
             x = pq.pop()
-            if x == None:
+            if x is None:
                 break
 
             switch, dist = x
@@ -140,7 +140,7 @@ class Dijkstra(Algorithm):
             for port_no, port in switch.ports.iteritems():
                 peer_switch = self.dpid_to_switch.get(port.peer_switch_dpid,
                                                       None)
-                if peer_switch == None:
+                if peer_switch is None:
                     continue
                 if dist + port.cost < distance[peer_switch]:
                     distance[peer_switch] = dist + port.cost
