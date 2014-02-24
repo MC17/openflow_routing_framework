@@ -566,9 +566,12 @@ class Routing(app_manager.RyuApp):
     def deploy_flow_entry(self, msg, pkt, switch_list, _4or6):
         """
             deploy flow entry into switch
+            e.g. if 'switch_list' is [A, B, C], then this method will
+                deploy flow entries A->B, B->C
         """
         # TODO
         # this method and last_switch_out should be restructured
+        dp = msg.datapath
         length = len(switch_list)
         for i in xrange(length - 1):
             this_switch = switch_list[i]
@@ -583,7 +586,6 @@ class Routing(app_manager.RyuApp):
             outport = this_switch.ports[outport_no]
             mac_src = outport.hw_addr
             mac_dst = next_switch.ports[outport.peer_port_no].hw_addr
-            dp = msg.datapath
             if _4or6 == 4:
                 # ip src exact match
                 wildcards = ofproto_v1_0.OFPFW_ALL
@@ -741,6 +743,10 @@ class Routing(app_manager.RyuApp):
             data = p.data)
 
     def last_switch_out(self, msg, pkt, outport_no, _4or6):
+        """
+        The packet has already reached the last switch and needs to be forwarded.
+        Does NOT support output to routers out of the AS
+        """
         if _4or6 == 4:
             ip_layer = self.find_packet(pkt, 'ipv4')
         else:
@@ -908,16 +914,9 @@ class Routing(app_manager.RyuApp):
                 self.drop_pkt(msg)
                 return
 
-            if src_switch == dst_switch:
-                dst_port_no = None
-                for num, p in dst_switch.ports.iteritems():
-                    if p.gateway.isBorder:
-                        # assume only one outport in one switch
-                        dst_port_no = p.port_no
-                        break
-                if dst_port_no:
-                    self.last_switch_out(msg, pkt, dst_port_no, _4or6)
-                    return
+            self.forward_to_switch_and_out(src_switch, dst_switch,
+                                               reply, msg, pkt, _4or6)
+            return
         elif src_switch == dst_switch:
             self.last_switch_out(msg, pkt, dst_port_no, _4or6)
             return
@@ -928,6 +927,86 @@ class Routing(app_manager.RyuApp):
         else:
             print 'dropped because no route'
             self.drop_pkt(msg)
+
+    def forward_to_switch_and_out(self, src_switch, dst_switch, dst_reply,
+                                  msg, pkt, _4or6):
+        """
+        In situation when a packet goes out of the AS
+        """
+        if src_switch != dst_switch:
+            result = self.routing_algo.find_route(src_switch, dst_switch)
+            if result:
+                self.deploy_flow_entry(msg, pkt, result, _4or6)
+            else:
+                print 'dropped because of no route'
+                self.drop_pkt(msg)
+
+        self.border_switch_out(msg, pkt, dst_switch, dst_reply, _4or6)
+
+    def border_switch_out(self, msg, pkt, dst_switch, dst_reply, _4or6):
+        """
+        Deploy the flow table on border switch and send the packet from
+        the initial switch.
+        """
+        if _4or6 == 4:
+            ip_layer = self.find_packet(pkt, 'ipv4')
+        else:
+            ip_layer = self.find_packet(pkt, 'ipv6')
+
+        initial_dp = msg.datapath
+        initial_switch = self.dpid_to_switch[dp.id]
+        dp = dst_switch.dp
+        ipDestAddr = netaddr.IPAddress(ip_layer.dst)
+        macAddr = dst_switch.ip_to_mac[ipDestAddr][0]
+        outport_no = dst_reply.outport_no
+
+        if _4or6 == 4:
+            # ip src exact match
+            wildcards = ofproto_v1_0.OFPFW_ALL
+            wildcards &= ~ofproto_v1_0.OFPFW_DL_TYPE
+            wildcards &= ~(0x3f << ofproto_v1_0.OFPFW_NW_DST_SHIFT)
+
+            match = dp.ofproto_parser.OFPMatch(
+                    # because of wildcards, parameters other than dl_type
+                    # and nw_dst could be any value
+                    wildcards = wildcards, in_port = 0,
+                    dl_src = 0, dl_dst = 0, dl_vlan = 0, dl_vlan_pcp = 0,
+                    dl_type = ether.ETH_TYPE_IP, nw_tos = 0, nw_proto = 0,
+                    nw_src = 0, nw_dst = ipDestAddr.value, tp_src = 0,
+                    tp_dst = 0)
+        else:
+            rule = nx_match.ClsRule()
+            rule.set_dl_type(ether.ETH_TYPE_IPV6)
+            rule.set_ipv6_dst(struct.unpack('!8H', ipDestAddr.packed))
+
+        actions = []
+        actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
+                       dst_switch.ports[outport_no].hw_addr.value))
+        actions.append(dp.ofproto_parser.OFPActionSetDlDst(macAddr.value))
+        actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
+
+        if _4or6 == 4:
+            mod = dp.ofproto_parser.OFPFlowMod(
+                    datapath = dp, match = match, cookie = 0,
+                    command = dp.ofproto.OFPFC_MODIFY,
+                    idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
+                    hard_timeout = Routing.FLOW_HARD_TIMEOUT,
+                    out_port = outport_no, actions = actions)
+        else:
+            mod = dp.ofproto_parser.NXTFlowMod(
+                    datapath = dp, cookie = 0,
+                    command = dp.ofproto.OFPFC_MODIFY,
+                    idle_timeout = Routing.FLOW_IDLE_TIMEOUT,
+                    hard_timeout = Routing.FLOW_HARD_TIMEOUT,
+                    out_port = outport_no, rule = rule,
+                    actions = actions)
+
+        out = dp.ofproto_parser.OFPPacketOut(
+            datapath = dp, buffer_id = msg.buffer_id,
+            in_port = msg.in_port, actions = actions)
+
+        dp.send_msg(mod)
+        initial_dp.send_msg(out)
 
     def drop_pkt(self, msg):
         # Note that this drop_pkt method only drops the packet,

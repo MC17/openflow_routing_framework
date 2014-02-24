@@ -49,12 +49,13 @@ class Port(switches.Port):
 
         self.gateway = None
         self.cost = float('inf') # infinite
+        self.isBorder = False
 
     def to_dict(self):
         d = super(Port, self).to_dict()
         d['peer_switch_dpid'] = dpid_to_str(self.peer_switch_dpid)
         d['peer_port_no'] = port_no_to_str(self.peer_port_no)
-        d['is_border'] = 'True' if self.is_border else 'False'
+        d['is_border'] = 'True' if self.isBorder else 'False'
         return d
 
     def update_from_config(self, config):
@@ -62,6 +63,8 @@ class Port(switches.Port):
             self.gateway = config[self.port_no]
         except KeyError:
             pass
+        if self.gateway:
+            self.isBorder = self.gateway.isBorder
         print self.port_no, 'gateway:', self.gateway
 
 

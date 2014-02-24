@@ -14,9 +14,12 @@ class EventDestinationRequest(event.EventRequestBase):
 
 
 class EventDestinationReply(event.EventReplyBase):
-    def __init__(self, dpid = None, switch_name = None, dest = None):
+    def __init__(self, dpid = None, switch_name = None, outport_no = None,
+                 neighbor_ip, dest = None):
         # 'dest' here is the event consumer, required by Ryu,
         # no need to set this parameter when init
         super(EventDestinationReply, self).__init__(dest)
         self.dpid = dpid
         self.switch_name = switch_name
+        self.outport_no = outport_no
+        self.neighbor_ip = neighbor_ip

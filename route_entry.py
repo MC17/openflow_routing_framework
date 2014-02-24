@@ -5,6 +5,8 @@ class RouteEntry(object):
         self.ip = ip
         self.prefix_len = prefix_len
         self.nexthop_ip = None
+        # which peer announces this entry, in type of netaddr object
+        self.announcer = None
 
     def __eq__(self, other):
         if not isinstance(other, RouteEntry):

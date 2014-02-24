@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import struct
+import netaddr
 from ryu.lib import hub
 from ryu.lib.hub import StreamServer
 from eventlet.queue import Queue
@@ -199,11 +200,13 @@ class Connection(object):
         if msg.wd_routes:
             for i in msg.wd_routes:
                 entry = route_entry.BGPEntry(i.network, i.length, 4)
+                entry.announcer = netaddr.IPAddress(self.address)
                 withdraw_entries.append(entry)
 
         if msg.nlri:
             for i in msg.nlri:
                 entry = route_entry.BGPEntry(i.network, i.length, 4)
+                entry.announcer = netaddr.IPAddress(self.address)
                 advert_entries.append(entry)
         
         attributes = route_entry.Attributes()
@@ -225,18 +228,21 @@ class Connection(object):
                 if i.nlri:
                     for j in i.nlri:
                         entry = route_entry.BGPEntry(j.network, j.length, _4or6)
+                        entry.announcer = netaddr.IPAddress(self.address)
                         advert_entries.append(entry)
             elif i.code == BGP4.bgp4_update._MP_UNREACH_NLRI:
                 _4or6 = self.__check_AFI(i.addr_family)
                 if i.wd_routes:
                     for j in i.wd_routes:
                         entry = route_entry.BGPEntry(j.network, j.length, _4or6)
+                        entry.announcer = netaddr.IPAddress(self.address)
                         withdraw_entries.append(entry)
         self.__add_route(advert_entries, attributes)
         self.__remove_route(withdraw_entries)
 
     def __add_route(self, advert_entries, attributes):
         # XXX acquire route table lock?
+        # XXX remove duplicate
         for entry in advert_entries:
             entry.attributes = attributes
             Server.route_table.append(entry)
@@ -251,7 +257,7 @@ class Connection(object):
     def _handle_notification(self, msg):
         print 'error code', msg.err_code, 'sub error code', msg.err_subcode
 
-    def _handle_keepalive(self,msg):
+    def _handle_keepalive(self, msg):
         pass
         
     @_deactivate

@@ -1,5 +1,5 @@
 from gateway import Gateway
-from ConfigParser import ConfigParser,ParsingError
+from ConfigParser import ConfigParser, ParsingError
 
 
 def read_cfg(filepath):
@@ -32,8 +32,22 @@ def read_bgp_config(filepath):
         options = config.options(section)
         for option in options:
             dict_[option] = config.get(section, option)
+
+        dict_['neighbor'] = []
+        i = 1
+        while True:
+            sectionName = 'neighbor%s' % i
+            try:
+                options = config.options(sectionName)
+            except:
+                break
+            neighborDict = {}
+            for option in options:
+                neighborDict[option] = config.get(sectionName, option)
+            dict_['neighbor'].append(neighborDict)
+            i += 1
     except IOError as e:
-        print "I/O error({0}):{1}".format(e.errno,e.strerror)
+        print "I/O error({0}):{1}".format(e.errno, e.strerror)
     except ParsingError as e:
         print e
     return dict_

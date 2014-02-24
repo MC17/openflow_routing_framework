@@ -14,7 +14,7 @@ import tap
 import ipdb
 
 
-def equal(dest_addr, route_entry):
+def address_match_entry(dest_addr, route_entry):
     dest_addr = netaddr.IPAddress(dest_addr)
     network = netaddr.IPNetwork(route_entry.ip)
     return dest_addr in network
@@ -82,22 +82,28 @@ class BGPer(app_manager.RyuApp):
 
     @set_ev_cls(dest_event.EventDestinationRequest)
     def destination_request_handler(self, event):
-        if event._4or6 == 4:
-            print 'dst address:', event.dest_addr
-        else:
-            print 'dst address:', event.dest_addr
+        print 'dst address:', event.dest_addr
 
         longest_match = None
         for entry in Server.route_table:
             if event._4or6 == entry._4or6:
-                if equal(event.dest_addr, entry):
+                if address_match_entry(event.dest_addr, entry):
                     if longest_match is None or \
                             entry.prefix_len > longest_match.prefix_len:
                         longest_match = entry
 
         if longest_match:
-            name = self.bgp_cfg.get('border_switch')
-            reply = dest_event.EventDestinationReply(switch_name=name)
+            address = longest_match.announcer
+            neighbors = self.bgp_cfg.get('neighbor')
+            for neighbor in neighbors:
+                if netaddr.IPAddress(neighbor['neighbor_ipv4']) == address or \
+                   netaddr.IPAddress(neighbor['neighbor_ipv6']) == address:
+                    name = neighbor['border_switch']
+                    outport = int(neighbor['outport_no'])
+                    reply = dest_event.EventDestinationReply(switch_name=name,
+                                                             outport_no=outport,
+                                                             neighbor_ip=address)
+                    break
         else:
             reply = dest_event.EventDestinationReply()
 
