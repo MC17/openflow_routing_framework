@@ -295,24 +295,26 @@ class Connection(object):
                             bgp_identifier = Server.local_ipv4,
                             data = Server.capabilities)
         bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_OPEN, data = open_reply)
-        p = packet.Packet()
-        p.add_protocol(bgp4_reply)
-        p.serialize()
-        self.send(p.data)
+        self.serialize_and_send(bgp4_reply)
 
     def send_keepalive_msg(self):
         keepalive = BGP4.bgp4(type_ = BGP4.BGP4_KEEPALIVE, data = None)
-        p = packet.Packet()
-        p.add_protocol(keepalive)
-        p.serialize()
-        self.send(p.data)
+        self.serialize_and_send(keepalive)
 
-    def send_notification_msg(self):
+    def send_notification_msg(self, err_code, err_subcode, data):
         """
             input: err_code, err_subcode, and data 
             output: send msg
         """
-        pass
+        notification_msg = BGP4.bgp4_notification(err_code, err_subcode, data)
+        bgp_msg = BGP4.bgp4(type_=BGP4.BGP4_NOTIFICATION, data=notification_msg)
+        self.serialize_and_send(bgp_msg)
+
+    def serialize_and_send(self, protocol_data):
+        p = packet.Packet()
+        p.add_protocol(protocol_data)
+        p.serialize()
+        self.send(p.data)
 
     def send_current_route_table(self):
         """
@@ -357,10 +359,7 @@ class Connection(object):
             update_msg = BGP4.bgp4_update(path_attr = path_attr,
                                           nlri = nlri)
             bgp4_msg = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_msg)
-            p = packet.Packet()
-            p.add_protocol(bgp4_msg)
-            p.serialize()
-            self.send(p.data)
+            self.serialize_and_send(bgp4_msg)
 
     def send_update_msg(self):
         """
