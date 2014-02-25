@@ -10,6 +10,7 @@ import greenlet
 import traceback
 
 from ryu.lib.packet import packet
+import time
 
 import BGP4
 import route_entry
@@ -69,6 +70,7 @@ class Connection(object):
         self.peer_as = None
         self.peer_id = None
         self.peer_capabilities = []
+        self.peer_last_keepalive_timestamp = None
         self._4or6 = 0
         self.hold_time = 240
 
@@ -175,6 +177,7 @@ class Connection(object):
         self.send_open_msg()
 
         if self.__check_capabilities(self.peer_capabilities):
+            self.peer_last_keepalive_timestamp = time.time()
             hub.spawn(self.keepalive)
             self.send_current_route_table()
         else:
@@ -183,6 +186,11 @@ class Connection(object):
     def keepalive(self):
         while True:
             self.send_keepalive_msg()
+            current_time = time.time()
+            if current_time - self.peer_last_keepalive_timestamp > \
+               self.hold_time:
+                self.send_notification_msg(err_code=4, err_subcode=0, data="Hold timer expired")
+                self.is_active = False
             hub.sleep(self.hold_time / 3)
 
     def __check_AFI(self, afi):
@@ -260,7 +268,7 @@ class Connection(object):
         print 'error code', msg.err_code, 'sub error code', msg.err_subcode
 
     def _handle_keepalive(self, msg):
-        pass
+        self.peer_last_keepalive_timestamp = time.time()
 
     @_deactivate
     def _send_loop(self):
