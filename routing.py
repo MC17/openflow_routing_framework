@@ -954,7 +954,7 @@ class Routing(app_manager.RyuApp):
             ip_layer = self.find_packet(pkt, 'ipv6')
 
         initial_dp = msg.datapath
-        initial_switch = self.dpid_to_switch[dp.id]
+        initial_switch = self.dpid_to_switch[initial_dp.id]
         dp = dst_switch.dp
         ipDestAddr = netaddr.IPAddress(ip_layer.dst)
         macAddr = dst_switch.ip_to_mac[ipDestAddr][0]
