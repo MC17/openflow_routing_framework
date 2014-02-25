@@ -138,12 +138,15 @@ class Connection(object):
 
     def __check_capabilities(self, peer_capabilities):
         """
+            ideally,
             1) checks if some important capabilities are supported by peer
                return True if OK
             2) assigns self.capabilities, which is the actual capabilities
                used in this connection
         """
-        # XXX
+        for self_capabilities in Server.capabilities:
+            if self_capabilities not in peer_capabilities:
+                return False
         return True
 
     def _handle_open(self, msg):
