@@ -22,8 +22,7 @@ BGP4_HEADER_SIZE = BGP4.bgp4.BGP4_HEADER_SIZE
 
 
 class Server(object):
-
-    def __init__(self, handler, conn_num = 128, *args, **kwargs):
+    def __init__(self, handler, conn_num=128, *args, **kwargs):
         super(Server, self).__init__()
         self.conn_num = conn_num
         self.handler = handler
@@ -32,7 +31,6 @@ class Server(object):
         self.server_loop()
 
     def server_loop(self):
-        
         server = StreamServer(('::', BGP_TCP_PORT), self.handler)
 
         print "Starting server..."
@@ -50,7 +48,8 @@ def _deactivate(method):
             raise
         finally:
             self.is_active = False
-    return deactivate   
+
+    return deactivate
 
 
 class Connection(object):
@@ -60,7 +59,7 @@ class Connection(object):
         self.socket = socket
         self.address = address
         self.is_active = True
-        
+
         # The limit is arbitrary. We need to limit queue size to
         # prevent it from eating memory up
         self.send_q = Queue(128)
@@ -72,15 +71,15 @@ class Connection(object):
         self.peer_capabilities = []
         self._4or6 = 0
         self.hold_time = 240
-    
+
     def close(self):
         print "close the connect from", self.address
-        self.socket.close() 
+        self.socket.close()
 
     @_deactivate
     def _recv_loop(self):
         header_size = BGP4_HEADER_SIZE
-        
+
         while self.is_active:
             buf = bytearray()
             receive = self._exact_receive(header_size)
@@ -103,7 +102,7 @@ class Connection(object):
             msg = BGP4.bgp4.parser(buffer(buf[0:packet_len]))
             self._handle(msg)
             eventlet.sleep(0)
-                    
+
     def _exact_receive(self, required_len):
         """
             receive exact size of data from socket
@@ -127,9 +126,9 @@ class Connection(object):
         elif msg_type == BGP4.BGP4_UPDATE:
             print 'receive UPDATE msg'
             self._handle_update(msg.data)
-        elif msg_type == BGP4.BGP4_NOTIFICATION:            
+        elif msg_type == BGP4.BGP4_NOTIFICATION:
             print 'receive NOTIFICATION msg'
-            self._handle_notification(msg.data)            
+            self._handle_notification(msg.data)
         elif msg_type == BGP4.BGP4_KEEPALIVE:
             self._handle_keepalive(msg)
             print 'receive KEEPALIVE msg'
@@ -174,7 +173,7 @@ class Connection(object):
         print 'capability:', self.peer_capabilities
 
         self.send_open_msg()
-        
+
         if self.__check_capabilities(self.peer_capabilities):
             hub.spawn(self.keepalive)
             self.send_current_route_table()
@@ -184,7 +183,7 @@ class Connection(object):
     def keepalive(self):
         while True:
             self.send_keepalive_msg()
-            hub.sleep(self.hold_time / 3)    
+            hub.sleep(self.hold_time / 3)
 
     def __check_AFI(self, afi):
         if afi == BGP4.AFI_IPV4:
@@ -195,7 +194,7 @@ class Connection(object):
             return None
 
     def _handle_update(self, msg):
-        
+
         print '----UPDATE----'
         advert_entries = []
         withdraw_entries = []
@@ -211,7 +210,7 @@ class Connection(object):
                 entry = route_entry.BGPEntry(i.network, i.length, 4)
                 entry.announcer = netaddr.IPAddress(self.address)
                 advert_entries.append(entry)
-        
+
         attributes = route_entry.Attributes()
         for i in msg.path_attr:
             if i.code == BGP4.bgp4_update._ORIGIN:
@@ -262,7 +261,7 @@ class Connection(object):
 
     def _handle_keepalive(self, msg):
         pass
-        
+
     @_deactivate
     def _send_loop(self):
         try:
@@ -278,7 +277,7 @@ class Connection(object):
 
     def serve(self):
         send_thr = hub.spawn(self._send_loop)
-       
+
         try:
             self._recv_loop()
         finally:
@@ -288,17 +287,17 @@ class Connection(object):
     #
     #  Utility methods for convenience
     #  
-    
+
     def send_open_msg(self):
-        open_reply = BGP4.bgp4_open(version = 4, my_as = Server.local_as,
-                            hold_time = self.hold_time,
-                            bgp_identifier = Server.local_ipv4,
-                            data = Server.capabilities)
-        bgp4_reply = BGP4.bgp4(type_ = BGP4.BGP4_OPEN, data = open_reply)
+        open_reply = BGP4.bgp4_open(version=4, my_as=Server.local_as,
+                                    hold_time=self.hold_time,
+                                    bgp_identifier=Server.local_ipv4,
+                                    data=Server.capabilities)
+        bgp4_reply = BGP4.bgp4(type_=BGP4.BGP4_OPEN, data=open_reply)
         self.serialize_and_send(bgp4_reply)
 
     def send_keepalive_msg(self):
-        keepalive = BGP4.bgp4(type_ = BGP4.BGP4_KEEPALIVE, data = None)
+        keepalive = BGP4.bgp4(type_=BGP4.BGP4_KEEPALIVE, data=None)
         self.serialize_and_send(keepalive)
 
     def send_notification_msg(self, err_code, err_subcode, data):
@@ -322,47 +321,48 @@ class Connection(object):
         """
         print '** Sending route_table'
         for i in Server.route_table:
-            path_attr = []
-            # 0 is a valid origin number, compare with None
-            if i.attributes.origin is not None:
-                origin_msg = BGP4.origin(value = i.attributes.origin)
-                path_attr.append(origin_msg)
-            if i.attributes.multi_exit_disc:
-                multi_exit_disc_msg = BGP4.multi_exit_disc(value = \
-                                                i.attributes.multi_exit_disc)
-                path_attr.append(multi_exit_disc_msg)
-            if i.attributes.as_path:
-                # information stored in as_path is the original got from
-                # peer's update messages, so when sending to others, we should
-                # insert server's AS number
-                as_path_msg = BGP4.as_path(as_type = i.attributes.as_path_type,
-                                    as_len = len(i.attributes.as_path) + 1,
-                                    as_values = [Server.local_as] + \
-                                                i.attributes.as_path)
-                path_attr.append(as_path_msg)
-            # nlri
-            if i._4or6 == 4:
-                nlri = [BGP4.NLRI(i.prefix_len, i.ip, i._4or6)]
-                if i.attributes.next_hop:
-                    next_hop_msg = BGP4.next_hop(_next_hop = \
-                                                    i.attributes.next_hop)
-                    path_attr.append(next_hop_msg)
-            elif i._4or6 == 6:
-                nlri = []
-                nlri_in_mp_reach = [BGP4.NLRI(i.prefix_len, i.ip, i._4or6)]
-                mp_reach_nlri_msg = BGP4.mp_reach_nlri(next_hop_len = \
-                                    16 * len(i.attributes.next_hop),
-                                    next_hop = i.attributes.next_hop,
-                                    nlri = nlri_in_mp_reach)
-                path_attr.append(mp_reach_nlri_msg)
+            self.send_update_msg(i)
 
-            update_msg = BGP4.bgp4_update(path_attr = path_attr,
-                                          nlri = nlri)
-            bgp4_msg = BGP4.bgp4(type_ = BGP4.BGP4_UPDATE, data = update_msg)
-            self.serialize_and_send(bgp4_msg)
-
-    def send_update_msg(self):
+    def send_update_msg(self, entry):
         """
             convenient method to send update message
+            input is a BGPEntry object
         """
-        pass
+        path_attr = []
+        # 0 is a valid origin number, compare with None
+        if entry.attributes.origin is not None:
+            origin_msg = BGP4.origin(value=entry.attributes.origin)
+            path_attr.append(origin_msg)
+        if entry.attributes.multi_exit_disc:
+            multi_exit_disc_msg = BGP4.multi_exit_disc(value= \
+                                            entry.attributes.multi_exit_disc)
+            path_attr.append(multi_exit_disc_msg)
+        if entry.attributes.as_path:
+            # information stored in as_path is the original got from
+            # peer's update messages, so when sending to others, we should
+            # insert server's AS number
+            as_path_msg = BGP4.as_path(as_type=entry.attributes.as_path_type,
+                                       as_len=len(entry.attributes.as_path)+1,
+                                       as_values=[Server.local_as] + \
+                                                 entry.attributes.as_path)
+            path_attr.append(as_path_msg)
+        # nlri
+        if entry._4or6 == 4:
+            nlri = [BGP4.NLRI(entry.prefix_len, entry.ip, entry._4or6)]
+            if entry.attributes.next_hop:
+                next_hop_msg = BGP4.next_hop(_next_hop= \
+                                                 entry.attributes.next_hop)
+                path_attr.append(next_hop_msg)
+        elif entry._4or6 == 6:
+            nlri = []
+            nlri_in_mp_reach = [BGP4.NLRI(entry.prefix_len, entry.ip, entry._4or6)]
+            mp_reach_nlri_msg = BGP4.mp_reach_nlri(next_hop_len= \
+                                                   16 * len(entry.attributes.next_hop),
+                                                   next_hop=entry.attributes.next_hop,
+                                                   nlri=nlri_in_mp_reach)
+            path_attr.append(mp_reach_nlri_msg)
+
+        update_msg = BGP4.bgp4_update(path_attr=path_attr,
+                                      nlri=nlri)
+        bgp4_msg = BGP4.bgp4(type_=BGP4.BGP4_UPDATE, data=update_msg)
+        self.serialize_and_send(bgp4_msg)
