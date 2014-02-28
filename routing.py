@@ -607,9 +607,9 @@ class Routing(app_manager.RyuApp):
 
             actions = []
             actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                           mac_src.value))
+                           mac_src.packed))
             actions.append(dp.ofproto_parser.OFPActionSetDlDst(
-                           mac_dst.value))
+                           mac_dst.packed))
             actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
             if _4or6 == 4:
@@ -642,9 +642,9 @@ class Routing(app_manager.RyuApp):
         mac_dst = next_switch.ports[outport.peer_port_no].hw_addr
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                        mac_src.value))
+                        mac_src.packed))
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
-                        mac_dst.value))
+                        mac_dst.packed))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
         out = dp.ofproto_parser.OFPPacketOut(
@@ -793,9 +793,9 @@ class Routing(app_manager.RyuApp):
 
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                        switch.ports[outport_no].hw_addr.value))
+                        switch.ports[outport_no].hw_addr.packed))
         actions.append(dp.ofproto_parser.OFPActionSetDlDst(
-                        mac_addr.value))
+                        mac_addr.packed))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
         if _4or6 == 4:
@@ -888,10 +888,7 @@ class Routing(app_manager.RyuApp):
         dst_switch, dst_port_no = self.find_switch_of_network(
                                 netaddr.IPAddress(protocol_pkt.dst), _4or6)
 
-        if _4or6 == 4:
-            print 'dst address:', protocol_pkt.dst
-        else:
-            print 'dst address:', protocol_pkt.dst
+        print 'dst address:', protocol_pkt.dst
         print 'destination switch, port_no', dst_switch, dst_port_no
 
         if dst_port_no == ofproto_v1_0.OFPP_LOCAL:
@@ -981,8 +978,8 @@ class Routing(app_manager.RyuApp):
 
         actions = []
         actions.append(dp.ofproto_parser.OFPActionSetDlSrc(
-                       dst_switch.ports[outport_no].hw_addr.value))
-        actions.append(dp.ofproto_parser.OFPActionSetDlDst(macAddr.value))
+                       dst_switch.ports[outport_no].hw_addr.packed))
+        actions.append(dp.ofproto_parser.OFPActionSetDlDst(macAddr.packed))
         actions.append(dp.ofproto_parser.OFPActionOutput(outport_no))
 
         if _4or6 == 4:

@@ -6,10 +6,12 @@ class Gateway(object):
             self, name='', ip='', ipv6='', port_no='',
             prefixlen='', ipv6prefixlen='', border=False):
         self.port_name = name
-        self.gw_ip = netaddr.IPNetwork(ip)
-        self.gw_ip.prefixlen = int(prefixlen)
-        self.gw_ipv6 = netaddr.IPNetwork(ipv6)
-        self.gw_ipv6.prefixlen = int(ipv6prefixlen)
+        self.gw_ip = netaddr.IPAddress(ip)
+        self.gw_ip_network = netaddr.IPNetwork(ip)
+        self.gw_ip_network.prefixlen = int(prefixlen)
+        self.gw_ipv6 = netaddr.IPAddress(ipv6)
+        self.gw_ipv6_network = netaddr.IPNetwork(ipv6)
+        self.gw_ipv6_network.prefixlen = int(ipv6prefixlen)
         self.port_no = port_no
         self.isBorder = border
 
