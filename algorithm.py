@@ -1,4 +1,7 @@
 import time
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 class Algorithm(object):
@@ -15,6 +18,7 @@ class Algorithm(object):
             the route and return a list of switches, indicating the
             path to destination, i.e. [src, ..., dst]
          '''
+        LOG.error('If you see this message, your algorithm is not enabled.')
         return None
 
     
@@ -62,14 +66,14 @@ class Dijkstra(Algorithm):
                     if self.heap[position*2+1][1] < self.heap[position*2+2][1]:
                         if self.heap[position][1] > self.heap[position*2+1][1]:
                             self._exchange(position, position*2+1)
-                            #print 'exchange', position, position*2+1
+                            LOG.debug('Exchange position %s %s', position, position*2+1)
                             position = position * 2 + 1
                         else:
                             break
                     else:
                         if self.heap[position][1] > self.heap[position*2+2][1]:
                             self._exchange(position, position*2+2)
-                            #print 'exchange', position, position*2+2
+                            LOG.debug('Exchange position %s %s', position, position*2+2)
                             position = position * 2 + 2
                         else:
                             break
@@ -132,9 +136,7 @@ class Dijkstra(Algorithm):
                     path.insert(0, previous[switch])
                     switch = previous[switch]
                 self.path[src, dst] = path
-                print 'path calculated:'
-                for i in path:
-                    print i
+                LOG.debug('Calculated path: %s', path)
                 return path
 
             for port_no, port in switch.ports.iteritems():
