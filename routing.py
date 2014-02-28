@@ -660,11 +660,11 @@ class Routing(app_manager.RyuApp):
             str(self.dpid_to_switch[datapath.id].ports[outport_no].gateway.gw_ip)
         dst_ip = str(dst_ip)
         p = packet.Packet()
-        e = ethernet.ethernet(dst = mac.BROADCAST,
+        e = ethernet.ethernet(dst = mac.BROADCAST_STR,
             src = src_mac_addr, ethertype = ether.ETH_TYPE_ARP)
         p.add_protocol(e)
         a = arp.arp_ip(opcode = arp.ARP_REQUEST, src_mac = src_mac_addr,
-                src_ip = src_ip, dst_mac = mac.DONTCARE,
+                src_ip = src_ip, dst_mac = mac.DONTCARE_STR,
                 dst_ip = dst_ip)
         p.add_protocol(a)
         p.serialize()
@@ -826,13 +826,13 @@ class Routing(app_manager.RyuApp):
         for dpid, switch in self.dpid_to_switch.iteritems():
             for port_no, port in switch.ports.iteritems():
                 if _4or6 == 4:
-                    if port.gateway and dst_addr in port.gateway.gw_ip:
+                    if port.gateway and dst_addr in port.gateway.gw_ip_network:
                         if dst_addr == port.gateway.gw_ip:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL
                         return self.dpid_to_switch[dpid], port_no
                 else:
-                    if port.gateway and dst_addr in port.gateway.gw_ipv6:
+                    if port.gateway and dst_addr in port.gateway.gw_ipv6_network:
                         if dst_addr == port.gateway.gw_ipv6:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL
