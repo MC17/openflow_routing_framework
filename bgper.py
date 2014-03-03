@@ -1,5 +1,6 @@
 import contextlib
 import netaddr
+import logging
 
 from ryu.base import app_manager
 from ryu.lib import hub
@@ -13,6 +14,7 @@ import tap
 
 import ipdb
 
+LOG = logging.getLogger(__name__)
 
 def address_match_entry(dest_addr, route_entry):
     dest_addr = netaddr.IPAddress(dest_addr)
@@ -34,9 +36,9 @@ class BGPer(app_manager.RyuApp):
         self.bgp_cfg = None
         try:
             self.bgp_cfg = read_bgp_config(self.filepath)
-            #print self.bgp_cfg
+            LOG.info('bgper.config: %s', self.bgp_cfg)
         except:
-            print "File %s Parse Error" % self.filepath
+            LOG.error('File %s parse error', self.filepath)
 
         local_ipv4 = self.bgp_cfg.get('local_ipv4')
         ipv4_prefix_len = self.bgp_cfg.get('ipv4_prefix_len')
@@ -82,7 +84,8 @@ class BGPer(app_manager.RyuApp):
 
     @set_ev_cls(dest_event.EventDestinationRequest)
     def destination_request_handler(self, event):
-        print 'dst address:', event.dest_addr
+        LOG.debug('Get EventDestinationRequest for dest addr %s',
+                  event.dest_addr)
 
         longest_match = None
         for entry in Server.route_table:
@@ -111,13 +114,13 @@ class BGPer(app_manager.RyuApp):
 
 
 def handler(socket, address):
-    print 'connect from ', address
+    LOG.info('BGP server got connection from %s', address)
     with contextlib.closing(Connection(socket, address)) as connection:
         try:
             BGPer.peers[address] = connection
             connection.serve()
         except:
-            print "Error in the connection from ", address
+            LOG.error('Error in connection with %s', address)
             raise
         finally:
             del BGPer.peers[address]

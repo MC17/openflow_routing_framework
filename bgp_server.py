@@ -8,6 +8,7 @@ from eventlet.queue import Queue
 import eventlet
 import greenlet
 import traceback
+import logging
 
 from ryu.lib.packet import packet
 import time
@@ -15,6 +16,7 @@ import time
 import BGP4
 import route_entry
 
+LOG = logging.getLogger(__name__)
 
 BGP_TCP_PORT = 179
 
@@ -34,7 +36,7 @@ class Server(object):
     def server_loop(self):
         server = StreamServer(('::', BGP_TCP_PORT), self.handler)
 
-        print "Starting server..."
+        LOG.info('BGP server starting...')
         server.serve_forever()
 
 
@@ -75,7 +77,7 @@ class Connection(object):
         self.hold_time = 240
 
     def close(self):
-        print "close the connect from", self.address
+        LOG.info('Connection %s closing...', self.address)
         self.socket.close()
 
     @_deactivate
@@ -124,18 +126,18 @@ class Connection(object):
         msg_type = msg.type_
         if msg_type == BGP4.BGP4_OPEN:
             self._handle_open(msg.data)
-            print 'receive OPEN msg'
+            LOG.debug('Receive OPEN msg')
         elif msg_type == BGP4.BGP4_UPDATE:
-            print 'receive UPDATE msg'
+            LOG.debug('Receive UPDATE msg')
             self._handle_update(msg.data)
         elif msg_type == BGP4.BGP4_NOTIFICATION:
-            print 'receive NOTIFICATION msg'
+            LOG.debug('Receive NOTIFICATION msg')
             self._handle_notification(msg.data)
         elif msg_type == BGP4.BGP4_KEEPALIVE:
             self._handle_keepalive(msg)
-            print 'receive KEEPALIVE msg'
+            LOG.debug('Receive KEEPALIVE msg')
         else:
-            print 'receive unknown msg_type', msg_type
+            LOG.debug('Receive unknown msg_type %s', msg_type)
 
     def __check_capabilities(self, peer_capabilities):
         """
@@ -168,11 +170,9 @@ class Connection(object):
             if isinstance(capability, BGP4.support_4_octets_as_num):
                 self.peer_as = capability.as_num
 
-        print '4/6:', self._4or6
-        print 'peer_as:', self.peer_as
-        print 'hold_time:', self.hold_time
-        print 'peer_id:', self.peer_id
-        print 'capability:', self.peer_capabilities
+        LOG.info('BGP peer info. 4/6: %s, AS %s, hold time %s, ID %s, capability %s',
+                 self._4or6, self.peer_as, self.hold_time, self.peer_id,
+                 self.peer_capabilities)
 
         self.send_open_msg()
 
@@ -202,8 +202,8 @@ class Connection(object):
             return None
 
     def _handle_update(self, msg):
+        LOG.debug('Handling UPDATE msg')
 
-        print '----UPDATE----'
         advert_entries = []
         withdraw_entries = []
 
@@ -265,7 +265,8 @@ class Connection(object):
                     Server.route_table.remove(j)
 
     def _handle_notification(self, msg):
-        print 'error code', msg.err_code, 'sub error code', msg.err_subcode
+        LOG.error('BGP error code %s, error sub code %s',
+                  msg.err_code, msg.err_subcode)
 
     def _handle_keepalive(self, msg):
         self.peer_last_keepalive_timestamp = time.time()
@@ -327,7 +328,7 @@ class Connection(object):
         """
             used after OPEN to send current route_table to peer
         """
-        print '** Sending route_table'
+        LOG.info('Sending local route table...')
         for i in Server.route_table:
             self.send_update_msg(i)
 
