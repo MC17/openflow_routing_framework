@@ -58,7 +58,7 @@ class Routing(app_manager.RyuApp):
             LOG.info('Switch configuration file: %s', self.switch_cfg)
         except:
             LOG.error('File %s parse error', self.filepath)
-            
+
         if util.bgper_config is None:
             try:
                 util.bgper_config = util.read_bgp_config(util.BGPER_CONFIG_PATH)
@@ -367,8 +367,14 @@ class Routing(app_manager.RyuApp):
             2)
             handles ARP reply from hosts, and try to send packets currently
             stored in switch.msg_buffer
+            3)
+            brutally forward all ARP packets to the tap port, so the system
+            protocol stack could also handle those MAC addresses
         """
         LOG.debug('Handling ARP packet %s', arp_pkt)
+
+        # forward ARP packets to the tap port
+        self.write_to_tap(pkt.data)
 
         if arp_pkt.opcode == arp.ARP_REPLY:
             self._handle_arp_reply(msg, pkt, arp_pkt)
@@ -423,6 +429,10 @@ class Routing(app_manager.RyuApp):
         ip_src = netaddr.IPAddress(ipv4_layer.src)
         ip_dst = netaddr.IPAddress(ipv4_layer.dst)
 
+        if ip_dst == netaddr.IPAddress(util.bgper_config['local_ipv4']):
+            self.write_to_tap(pkt.data)
+            return True
+
         need_reply = False
         for _k, p in switch.ports.iteritems():
             if p.gateway and p.gateway.gw_ip == ip_dst:
@@ -461,6 +471,12 @@ class Routing(app_manager.RyuApp):
 
     def _handle_icmpv6(self, msg, pkt, icmpv6_pkt):
         LOG.debug('Handling ICMPv6 packet %s', icmpv6_pkt)
+
+        ipv6_pkt = self.find_packet(pkt, 'ipv6')
+        dst_addr = netaddr.IPAddress(ipv6_pkt.dst)
+        if dst_addr == netaddr.IPAddress(util.bgper_config['local_ipv6']):
+            self.write_to_tap(pkt.data)
+            return
 
         switch = self.dpid_to_switch[msg.datapath.id]
         in_port_no = msg.in_port
@@ -889,16 +905,9 @@ class Routing(app_manager.RyuApp):
                 pass
 
         # forward BGP packets
-        try:
-            tcp_layer = self.find_packet(pkt, 'tcp')
-            if tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
-                tap.device.write(pkt.data)
-                return
-        except tap.WriteError:
-            LOG.error('Tap device write error!')
-            return
-        except:
-            pass
+        tcp_layer = self.find_packet(pkt, 'tcp')
+        if tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
+            self.write_to_tap(pkt.data)
 
         dst_switch, dst_port_no = self.find_switch_of_network(
                                 netaddr.IPAddress(protocol_pkt.dst), _4or6)
@@ -941,6 +950,13 @@ class Routing(app_manager.RyuApp):
         else:
             LOG.debug('Packet dropped because of no route to the switch')
             self.drop_pkt(msg)
+
+    def write_to_tap(self, data):
+        try:
+            tap.device.write(data)
+        except tap.WriteError:
+            LOG.error('Tap device write error!')
+            raise tap.WriteError
 
     def forward_to_switch_and_out(self, src_switch, dst_switch, dst_reply,
                                   msg, pkt, _4or6):
