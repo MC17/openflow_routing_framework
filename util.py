@@ -1,5 +1,8 @@
 from gateway import Gateway
 from ConfigParser import ConfigParser, ParsingError
+import logging
+
+LOG = logging.getLogger(__name__)
 
 
 def read_cfg(filepath):
@@ -47,9 +50,9 @@ def read_bgp_config(filepath):
             dict_['neighbor'].append(neighborDict)
             i += 1
     except IOError as e:
-        print "I/O error({0}):{1}".format(e.errno, e.strerror)
+        LOG.error("I/O error({0}):{1}".format(e.errno, e.strerror))
     except ParsingError as e:
-        print e
+        LOG.error(e)
     return dict_
 
 if __name__ == '__main__':

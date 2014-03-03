@@ -2,10 +2,12 @@ import fcntl
 import os
 import struct
 import subprocess
+import logging
 
 # use as a global variable
 device = None
 
+LOG = logging.getLogger(__name__)
 
 class WriteError(Exception):
     pass
@@ -36,14 +38,14 @@ class TapDevice(object):
 
     def setIPv4Address(self, ipv4='192.168.1.101', prefixLength = 24):
         command = ['ifconfig', self.name, ipv4 + '/' + str(prefixLength)]
-        print 'config IPv4 address:', command
+        LOG.info('Configure tap port with IPv4 address: %s', command)
         subprocess.check_call(command)
         self.__turnUpInterface()
 
     def setIPv6Address(self, ipv6, prefixLength):
         command = ['ip', '-6', 'addr', 'add', ipv6 + '/' + str(prefixLength),
                    'dev', self.name]
-        print 'config IPv6 address:', command
+        LOG.info('Configure tap port with IPv6 address: %s', command)
         subprocess.check_call(command)
         self.__turnUpInterface()
 

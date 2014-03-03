@@ -1,4 +1,5 @@
 import netaddr
+import logging
 
 from ryu.topology import switches
 from ryu.topology.switches import Port as Port_type
@@ -6,6 +7,7 @@ from ryu.lib.dpid import dpid_to_str
 from ryu.lib.port_no import port_no_to_str
 from ryu.ofproto.ofproto_v1_0_parser import OFPPhyPort
 
+LOG = logging.getLogger(__name__)
 
 class Port(switches.Port):
     def __init__(self, port, peer = None, dp = None):
@@ -42,13 +44,12 @@ class Port(switches.Port):
             self.hw_addr = netaddr.EUI(port.hw_addr)
             self.name = port.name
         else:
-            print type(port)
-            print switches.Port
-            print Port_type
+            LOG.error('%s %s %s not match', type(port), switches.Port,
+                      Port_type)
             raise AttributeError
 
         self.gateway = None
-        self.cost = float('inf') # infinite
+        self.cost = float('inf')  # infinite
         self.isBorder = False
 
     def to_dict(self):
@@ -65,7 +66,8 @@ class Port(switches.Port):
             pass
         if self.gateway:
             self.isBorder = self.gateway.isBorder
-        print self.port_no, 'gateway:', self.gateway
+        LOG.debug('Port %s configured with gateway %s',
+                  self.port_no, self.gateway)
 
 
 class Switch(switches.Switch):
@@ -97,7 +99,7 @@ class Switch(switches.Switch):
         try:
             d = config[self.name]
         except KeyError:
-            print 'WARNING', self.name, 'is not configured'
+            LOG.warning('WARNING: %s is not configured.', self.name)
             return
         for k, v in self.ports.iteritems():
             v.update_from_config(d)
