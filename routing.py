@@ -1,5 +1,6 @@
 import time
 import os
+import logging
 from eventlet import patcher
 from eventlet import greenio
 native_threading = patcher.original("threading")
@@ -29,6 +30,10 @@ import tap
 import ipdb
 
 
+FORMAT = '%(name)s[%(levelname)s]%(message)s'
+logging.basicConfig(format=FORMAT)
+LOG = logging.getLogger(__name__)
+
 class Routing(app_manager.RyuApp):
     ARP_TIMEOUT = 600    # in seconds
 
@@ -50,9 +55,9 @@ class Routing(app_manager.RyuApp):
 
         try:
             self.switch_cfg = read_cfg(self.filepath)
-            #print self.switch_cfg
+            LOG.info('Switch configuration file: %s', self.switch_cfg)
         except:
-            print "File %s Parse Error" % self.filepath
+            LOG.error('File %s parse error', self.filepath)
 
         #hub.spawn(self._test)
         self._init_events()
@@ -63,14 +68,14 @@ class Routing(app_manager.RyuApp):
             hub.sleep(3)
 
     def __test(self):
-        print '-------------------'
+        LOG.debug('-------------------')
         for k, switch in self.dpid_to_switch.iteritems():
-            print k, switch, switch.name
+            LOG.debug('dpid %s, switch %s, swith name %s',
+                      k, switch, switch.name)
             for k, port in switch.ports.iteritems():
-                print port
-                print port.peer_switch_dpid
-
-        print '-------------------'
+                LOG.debug("port %s, dpid of port's peer %s",
+                          port, port.peer_switch_dpid)
+        LOG.debug('-------------------')
 
     def _init_pipe(self):
         """
@@ -93,11 +98,11 @@ class Routing(app_manager.RyuApp):
         - OK.
         """
         self._init_pipe()
-        print 'Starting native event thread'
+        LOG.info('Starting native event thread')
         event_thread = native_threading.Thread(target = self.read_from_tap)
         event_thread.setDaemon(True)
         event_thread.start()
-        print 'Starting green dispatch thread'
+        LOG.info('Starting green dispatch thread')
         dispatch_thread = hub.spawn(self.dispatch_thread)
 
     def dispatch_thread(self):
@@ -128,12 +133,13 @@ class Routing(app_manager.RyuApp):
             while not self._event_queue.empty():
                 try:
                     data = self._event_queue.get(block = False)
-                    print 'New packet in queue'
+                    LOG.debug('New packet in event_queue')
                     if out_switch is None or out_port_no is None:
                         out_switch, out_port_no = get_switch_and_port(
                                                 self.switch_cfg,
                                                 self.dpid_to_switch)
-                        print 'out_switch, out_port', out_switch, out_port_no
+                        LOG.debug('out_switch %s, out_port %s for tunneled msg',
+                                  out_switch, out_port_no)
                     if out_switch and out_port_no:
                         actions = []
                         actions.append(
@@ -200,7 +206,7 @@ class Routing(app_manager.RyuApp):
         switch.dp.send_msg(msg4)
         switch.dp.send_msg(msg6)
 
-        print 'pre-installed flow entry'
+        LOG.debug('Pre-installed flow entry')
 
     @set_ev_cls(topology.event.EventSwitchEnter)
     def switch_enter_handler(self, event):
@@ -325,7 +331,7 @@ class Routing(app_manager.RyuApp):
         for packet in pkt.protocols:
             if packet.protocol_name == target:
                 return packet
-        print "can't find target_packet", target
+        LOG.error("Can't find packet for target %s", target)
         return None
 
     def _handle_arp_reply(self, msg, pkt, arp_pkt):
@@ -355,7 +361,7 @@ class Routing(app_manager.RyuApp):
             handles ARP reply from hosts, and try to send packets currently
             stored in switch.msg_buffer
         """
-        #print 'arp', arp_pkt
+        LOG.debug('Handling ARP packet %s', arp_pkt)
 
         if arp_pkt.opcode == arp.ARP_REPLY:
             self._handle_arp_reply(msg, pkt, arp_pkt)
@@ -393,7 +399,7 @@ class Routing(app_manager.RyuApp):
                 actions = [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data = p.data)
 
-        print 'ARP replied:', reply_src_mac, req_dst_ip
+        LOG.debug('ARP replied: %s - %s', reply_src_mac, req_dst_ip)
 
     def _handle_icmp(self, msg, pkt, icmp_pkt):
         """
@@ -443,11 +449,11 @@ class Routing(app_manager.RyuApp):
         datapath.send_packet_out(in_port=ofproto_v1_0.OFPP_NONE,
                 actions=[datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                 data=p.data)
-        print 'send a ping replay'
+        LOG.debug('Ping replied %s -> %s', ip_dst, ip_src)
         return True
 
     def _handle_icmpv6(self, msg, pkt, icmpv6_pkt):
-        #print 'icmpv6', icmpv6_pkt
+        LOG.debug('Handling ICMPv6 packet %s', icmpv6_pkt)
 
         switch = self.dpid_to_switch[msg.datapath.id]
         in_port_no = msg.in_port
@@ -472,10 +478,10 @@ class Routing(app_manager.RyuApp):
 
         elif icmpv6_pkt.type_ == icmpv6.ND_NEIGHBOR_SOLICIT:
             port = switch.ports[in_port_no]
+            LOG.debug('ND_NEIGHBOR_SOLICIT, dest %s',
+                      icmpv6_pkt.data.dst)
             if port.gateway and \
                netaddr.IPAddress(icmpv6_pkt.data.dst) != port.gateway.gw_ipv6:
-                print 'icmpv6 dest', icmpv6_pkt.data.dst
-                print 'gw_ipv6', str(port.gateway.gw_ipv6)
                 return False
             #send a ND_NEIGHBOR_REPLY packet
             ether_layer = self.find_packet(pkt, 'ethernet')
@@ -504,7 +510,8 @@ class Routing(app_manager.RyuApp):
                     actions=
                         [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
-            print 'send a NA packet'
+            LOG.debug('NA packet sent %s -> %s', icmpv6_pkt.data.dst,
+                      ipv6_pkt.src)
             return True
         elif icmpv6_pkt.type_ == icmpv6.ICMPV6_ECHO_REQUEST:
             ipv6_pkt = self.find_packet(pkt, 'ipv6')
@@ -538,7 +545,7 @@ class Routing(app_manager.RyuApp):
                     actions=
                         [datapath.ofproto_parser.OFPActionOutput(in_port_no)],
                     data=p.data)
-            print 'send a ping6 reply packet'
+            LOG.debug('Ping6 replied %s -> %s', ipv6_pkt.dst, ipv6_pkt.src)
             return True
 
         return False
@@ -555,9 +562,10 @@ class Routing(app_manager.RyuApp):
             if ip_layer is None:
                 ip_layer = self.find_packet(packet, 'arp')
                 ip_layer.src = ip_layer.src_ip
-                print 'ARP from ARP'
+                LOG.debug('Get ARP info from ARP packet')
 
-            print 'ARP entry:', ether_layer.src, ip_layer.src
+            LOG.debug('New ARP entry: %s - %s', ether_layer.src,
+                      ip_layer.src)
         else:
             ip_layer = self.find_packet(packet, 'ipv6')
         switch.ip_to_mac[netaddr.IPAddress(ip_layer.src)] = \
@@ -630,7 +638,7 @@ class Routing(app_manager.RyuApp):
                         actions = actions)
 
             this_switch.dp.send_msg(mod)
-            print 'deployed:', this_switch
+            LOG.info('Flow entry deployed to %s', this_switch)
 
         # send packet out from the first switch
         switch = switch_list[0]
@@ -756,7 +764,8 @@ class Routing(app_manager.RyuApp):
         switch = self.dpid_to_switch[dp.id]
         ipDestAddr = netaddr.IPAddress(ip_layer.dst)
 
-        print 'last_switch_out:', switch, outport_no
+        LOG.debug('last_switch_out: switch %s, port_no %s',
+                  switch, outport_no)
         try:
             # TODO introduce ARP timeout
             mac_addr = switch.ip_to_mac[ipDestAddr][0]
@@ -836,7 +845,6 @@ class Routing(app_manager.RyuApp):
                         if dst_addr == port.gateway.gw_ipv6:
                             return self.dpid_to_switch[dpid], \
                                     ofproto_v1_0.OFPP_LOCAL
-                        print 'out:', str(dst_addr), port_no
                         return self.dpid_to_switch[dpid], port_no
         return None, None
 
@@ -846,7 +854,7 @@ class Routing(app_manager.RyuApp):
                 return s
 
     def _handle_ip(self, msg, pkt, protocol_pkt):
-        #print 'ip', protocol_pkt
+        LOG.debug('Handling IP packet %s', protocol_pkt)
 
         if isinstance(protocol_pkt, ipv4.ipv4):
             _4or6 = 4
@@ -880,7 +888,7 @@ class Routing(app_manager.RyuApp):
                 tap.device.write(pkt.data)
                 return
         except tap.WriteError:
-            print 'Tap device write error!'
+            LOG.error('Tap device write error!')
             return
         except:
             pass
@@ -888,8 +896,8 @@ class Routing(app_manager.RyuApp):
         dst_switch, dst_port_no = self.find_switch_of_network(
                                 netaddr.IPAddress(protocol_pkt.dst), _4or6)
 
-        print 'dst address:', protocol_pkt.dst
-        print 'destination switch, port_no', dst_switch, dst_port_no
+        LOG.debug('First try of routing for dst %s, find switch %s, port %s',
+                  protocol_pkt.dst, dst_switch, dst_port_no)
 
         if dst_port_no == ofproto_v1_0.OFPP_LOCAL:
             # should be handled by ICMP/ARP etc.
@@ -905,12 +913,12 @@ class Routing(app_manager.RyuApp):
                 dst_switch = self.dpid_to_switch[reply.dpid]
             elif reply.switch_name:
                 dst_switch = self.name_to_switch(reply.switch_name)
-                print 'dest switch replied from B:', dst_switch
             else:
-                print 'dropped because dst_switch == None'
+                LOG.debug('Packet dropped because dst_switch == None')
                 self.drop_pkt(msg)
                 return
 
+            LOG.debug('dst_switch replied from B: %s', dst_switch)
             self.forward_to_switch_and_out(src_switch, dst_switch,
                                                reply, msg, pkt, _4or6)
             return
@@ -919,10 +927,12 @@ class Routing(app_manager.RyuApp):
             return
 
         result = self.routing_algo.find_route(src_switch, dst_switch)
+        LOG.debug('Second try of routing for dst %s, find route %s',
+                  protocol_pkt.dst, result)
         if result:
             self.deploy_flow_entry(msg, pkt, result, _4or6)
         else:
-            print 'dropped because no route'
+            LOG.debug('Packet dropped because of no route to the switch')
             self.drop_pkt(msg)
 
     def forward_to_switch_and_out(self, src_switch, dst_switch, dst_reply,
@@ -935,7 +945,7 @@ class Routing(app_manager.RyuApp):
             if result:
                 self.deploy_flow_entry(msg, pkt, result, _4or6)
             else:
-                print 'dropped because of no route'
+                LOG.debug('Packet dropped because of no route to the address out of AS')
                 self.drop_pkt(msg)
 
         self.border_switch_out(msg, pkt, dst_switch, dst_reply, _4or6)
