@@ -25,7 +25,8 @@ def read_cfg(filepath):
                                     border)
     return ans
 
-
+bgper_config = None
+BGPER_CONFIG_PATH = 'bgper.config'
 def read_bgp_config(filepath):
     dict_ = {}
     config = ConfigParser()

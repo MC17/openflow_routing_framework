@@ -21,7 +21,7 @@ from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6)
 from ryu.lib import mac
 
 from switch import Port, Switch
-from util import read_cfg
+import util
 import algorithm
 import dest_event
 import BGP4
@@ -54,10 +54,17 @@ class Routing(app_manager.RyuApp):
         self.filepath = 'routing.config'
 
         try:
-            self.switch_cfg = read_cfg(self.filepath)
+            self.switch_cfg = util.read_cfg(self.filepath)
             LOG.info('Switch configuration file: %s', self.switch_cfg)
         except:
             LOG.error('File %s parse error', self.filepath)
+            
+        if util.bgper_config is None:
+            try:
+                util.bgper_config = util.read_bgp_config(util.BGPER_CONFIG_PATH)
+                LOG.info('bgper_config: %s', util.bgper_config)
+            except:
+                LOG.error('File %s parse error', util.bgper_config)
 
         #hub.spawn(self._test)
         self._init_events()
