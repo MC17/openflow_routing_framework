@@ -19,6 +19,7 @@ from ryu.ofproto import ofproto_v1_0, nx_match
 from ryu.ofproto import ether, inet
 from ryu.lib.packet import (packet, ethernet, arp, icmp, icmpv6, ipv4, ipv6)
 from ryu.lib import mac
+import ryu.utils
 
 from switch import Port, Switch
 import util
@@ -140,7 +141,8 @@ class Routing(app_manager.RyuApp):
             while not self._event_queue.empty():
                 try:
                     data = self._event_queue.get(block = False)
-                    LOG.debug('New packet in event_queue')
+                    LOG.debug('New packet in event_queue: %s',
+                              ryu.utils.hex_array(data))
                     if out_switch is None or out_port_no is None:
                         out_switch, out_port_no = get_switch_and_port(
                                                 self.switch_cfg,
@@ -327,7 +329,7 @@ class Routing(app_manager.RyuApp):
                 # port.curr is a number of 32 bits, only used 12 bits in ovs
                 # represents current features of the port.
                 # LOCAL port doesn't have a cost value
-                curr = port.curr & 0x7f	# get last 7 bits
+                curr = port.curr & 0x7f	 # get last 7 bits
                 p.cost = 64/curr
                 print 'cost:', p.cost
 
@@ -336,8 +338,11 @@ class Routing(app_manager.RyuApp):
 
     def find_packet(self, pkt, target):
         for packet in pkt.protocols:
-            if packet.protocol_name == target:
-                return packet
+            try:
+                if packet.protocol_name == target:
+                    return packet
+            except AttributeError:
+                pass
         LOG.error("Can't find packet for target %s", target)
         return None
 
@@ -420,6 +425,8 @@ class Routing(app_manager.RyuApp):
             may handle other types of ICMP msg in the future;
             return True if send a response
         """
+        LOG.debug('Handling ICMP packet %s', icmp_pkt)
+
         if icmp_pkt.type != icmp.ICMP_ECHO_REQUEST:
             return False
 
@@ -430,7 +437,8 @@ class Routing(app_manager.RyuApp):
         ip_dst = netaddr.IPAddress(ipv4_layer.dst)
 
         if ip_dst == netaddr.IPAddress(util.bgper_config['local_ipv4']):
-            self.write_to_tap(pkt.data)
+            self.write_to_tap(pkt.data, modifyMacAddress=True)
+            LOG.debug('Forward ICMP packet to tap port.')
             return True
 
         need_reply = False
@@ -475,7 +483,7 @@ class Routing(app_manager.RyuApp):
         ipv6_pkt = self.find_packet(pkt, 'ipv6')
         dst_addr = netaddr.IPAddress(ipv6_pkt.dst)
         if dst_addr == netaddr.IPAddress(util.bgper_config['local_ipv6']):
-            self.write_to_tap(pkt.data)
+            self.write_to_tap(pkt.data, modifyMacAddress=True)
             return
 
         switch = self.dpid_to_switch[msg.datapath.id]
@@ -906,8 +914,15 @@ class Routing(app_manager.RyuApp):
 
         # forward BGP packets
         tcp_layer = self.find_packet(pkt, 'tcp')
-        if tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
-            self.write_to_tap(pkt.data)
+        if tcp_layer and tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
+            self.write_to_tap(pkt.data, modifyMacAddress=True)
+        # forward packet destined to BGP server address
+        dst = netaddr.IPAddress(protocol_pkt.dst)  # could be IPv4 or IPv6
+        if dst == netaddr.IPAddress(util.bgper_config['local_ipv4']) or \
+           dst == netaddr.IPAddress(util.bgper_config['local_ipv6']):
+            self.write_to_tap(pkt.data, modifyMacAddress=True)
+            LOG.debug('Forward IP packet to tap port')
+            return
 
         dst_switch, dst_port_no = self.find_switch_of_network(
                                 netaddr.IPAddress(protocol_pkt.dst), _4or6)
@@ -951,9 +966,17 @@ class Routing(app_manager.RyuApp):
             LOG.debug('Packet dropped because of no route to the switch')
             self.drop_pkt(msg)
 
-    def write_to_tap(self, data):
+    def write_to_tap(self, data, modifyMacAddress=False):
+        # if modifyMacAddress is True, change the destination MAC address
+        # to the address of tap port
+        if modifyMacAddress:
+            data = bytearray(data)
+            struct.pack_into('!6s', data, 0, tap.device.mac_addr.packed)
+            data = str(data)
+            LOG.debug('Destination address changed to address of tap port')
         try:
             tap.device.write(data)
+            LOG.debug('Data written to tap: %s', ryu.utils.hex_array(data))
         except tap.WriteError:
             LOG.error('Tap device write error!')
             raise tap.WriteError
