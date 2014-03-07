@@ -918,7 +918,7 @@ class Routing(app_manager.RyuApp):
         if _4or6 == 4:
             try:
                 icmp_layer = self.find_packet(pkt, 'icmp')
-                if self._handle_icmp(msg, pkt, icmp_layer):
+                if icmp_layer and self._handle_icmp(msg, pkt, icmp_layer):
                     # if icmp method handles this packet successfully,
                     # further processing is not needed
                     return
@@ -927,7 +927,7 @@ class Routing(app_manager.RyuApp):
         else:  # _4or6 == 6
             try:
                 icmpv6_layer = self.find_packet(pkt, 'icmpv6')
-                if self._handle_icmpv6(msg, pkt, icmpv6_layer):
+                if icmpv6_layer and self._handle_icmpv6(msg, pkt, icmpv6_layer):
                     return
             except:
                 pass
