@@ -28,7 +28,6 @@ import dest_event
 import BGP4
 import tap
 
-import ipdb
 
 
 FORMAT = '%(name)s[%(levelname)s]%(message)s'

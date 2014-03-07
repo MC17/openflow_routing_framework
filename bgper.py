@@ -12,7 +12,6 @@ import BGP4
 import util
 import tap
 
-import ipdb
 
 LOG = logging.getLogger(__name__)
 
