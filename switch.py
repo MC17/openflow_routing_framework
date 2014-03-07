@@ -51,6 +51,7 @@ class Port(switches.Port):
         self.gateway = None
         self.cost = float('inf')  # infinite
         self.isBorder = False
+        LOG.debug('MAC address of this interface is %s', self.hw_addr)
 
     def to_dict(self):
         d = super(Port, self).to_dict()

@@ -113,18 +113,39 @@ class Routing(app_manager.RyuApp):
         LOG.info('Starting green dispatch thread')
         dispatch_thread = hub.spawn(self.dispatch_thread)
 
+    def find_switch_and_port_for_dispatch(self, data):
+        """
+        Based on dest addr of packets in dispatch queue, find the switch obj
+        and out-port number, return None if find nothing
+        """
+        pkt = packet.Packet(data)
+        dst_ip = None
+        for p in pkt.protocols:
+            if isinstance(p, arp.arp):
+                dst_ip = p.dst_ip
+                break
+            elif isinstance(p, ipv4.ipv4):
+                dst_ip = p.dst
+                break
+            elif isinstance(p, ipv6.ipv6):
+                dst_ip = p.dst
+                break
+            else:
+                LOG.warning('Some unhandled packets sent from dispatch queue')
+                pass
+        dst_ip = netaddr.IPAddress(dst_ip)
+        dst_switch = None
+        dst_port = None
+        for neighbor in util.bgper_config['neighbor']:
+            if netaddr.IPAddress(neighbor['neighbor_ipv4']) == dst_ip or \
+               netaddr.IPAddress(neighbor['neighbor_ipv6']) == dst_ip:
+                dst_switch = neighbor['border_switch']
+                dst_port = int(neighbor['outport_no'])
+                break
+        dst_switch = self.name_to_switch(dst_switch)
+        return dst_switch, dst_port
+
     def dispatch_thread(self):
-        
-        # nested method to find the switch and port of the "router"
-        def get_switch_and_port(config, dpid_to_switch):
-            # in switch_cfg, s is switch name, p is port number
-            for s in config.keys():
-                for p in config[s].keys():
-                    if config[s][p].isBorder == True:
-                        for dpid in dpid_to_switch.keys():
-                            if dpid_to_switch[dpid].name == s:
-                                return dpid_to_switch[dpid], p
-            return None, None
 
         out_switch = None
         out_port_no = None
@@ -144,9 +165,8 @@ class Routing(app_manager.RyuApp):
                     LOG.debug('New packet in event_queue: %s',
                               ryu.utils.hex_array(data))
                     if out_switch is None or out_port_no is None:
-                        out_switch, out_port_no = get_switch_and_port(
-                                                self.switch_cfg,
-                                                self.dpid_to_switch)
+                        out_switch, out_port_no = \
+                            self.find_switch_and_port_for_dispatch(data)
                         LOG.debug('out_switch %s, out_port %s for tunneled msg',
                                   out_switch, out_port_no)
                     if out_switch and out_port_no:
@@ -883,6 +903,7 @@ class Routing(app_manager.RyuApp):
         for dpid, s in self.dpid_to_switch.iteritems():
             if s.name == switch_name:
                 return s
+        return None
 
     def _handle_ip(self, msg, pkt, protocol_pkt):
         LOG.debug('Handling IP packet %s', protocol_pkt)
