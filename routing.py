@@ -920,21 +920,15 @@ class Routing(app_manager.RyuApp):
         self._remember_mac_addr(src_switch, pkt, _4or6)
 
         if _4or6 == 4:
-            try:
-                icmp_layer = self.find_packet(pkt, 'icmp')
-                if icmp_layer and self._handle_icmp(msg, pkt, icmp_layer):
-                    # if icmp method handles this packet successfully,
-                    # further processing is not needed
-                    return
-            except:
-                pass
+            icmp_layer = self.find_packet(pkt, 'icmp')
+            if icmp_layer and self._handle_icmp(msg, pkt, icmp_layer):
+                # if icmp method handles this packet successfully,
+                # further processing is not needed
+                return
         else:  # _4or6 == 6
-            try:
-                icmpv6_layer = self.find_packet(pkt, 'icmpv6')
-                if icmpv6_layer and self._handle_icmpv6(msg, pkt, icmpv6_layer):
-                    return
-            except:
-                pass
+            icmpv6_layer = self.find_packet(pkt, 'icmpv6')
+            if icmpv6_layer and self._handle_icmpv6(msg, pkt, icmpv6_layer):
+                return
 
         # forward BGP packets
         tcp_layer = self.find_packet(pkt, 'tcp')
