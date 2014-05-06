@@ -538,11 +538,16 @@ class Routing(app_manager.RyuApp):
             ether_dst = ether_layer.src
             ether_src = str(port.hw_addr)
             e = ethernet.ethernet(ether_dst, ether_src, ether.ETH_TYPE_IPV6)
-            ic6_data_data = icmpv6.nd_option_la(hw_src=ether_src, data=None)
-            #res = 3 or 7
-            ic6_data = icmpv6.nd_neighbor(res=3, dst=icmpv6_pkt.data.dst,
-                    type_=icmpv6.nd_neighbor.ND_OPTION_TLA, length=1,
-                    data=ic6_data_data)
+            ic6_data_data = icmpv6.nd_option_tla(hw_src=ether_src, data=None)
+            # res: R, S, O flags for Neighbor advertisement
+            # R: Router flag. Set if the sender of the advertisement is a router
+            # S: Solicited flag. Set if the advertisement is in response to a
+            #    solicitation
+            # O: Override flag. When set, the receiving node must update its cache
+            # here we must set R, S; O is optional but we decide to set
+            # so res = 7
+            ic6_data = icmpv6.nd_neighbor(res=7, dst=icmpv6_pkt.data.dst,
+                                          option=ic6_data_data)
             ic6 = icmpv6.icmpv6(type_=icmpv6.ND_NEIGHBOR_ADVERT, code=0,
                                 csum=0, data=ic6_data)
             #payload_length
@@ -784,11 +789,10 @@ class Routing(app_manager.RyuApp):
                 payload_length = 32, nxt = 58, hop_limit = 255,
                 src = src_ip, dst = dst_ip_multicast)
         # source link-layer address
-        sla_addr = icmpv6.nd_option_la(hw_src = src_mac_addr)
-        # ns for neighbor solicit, res for reserved
-        ns = icmpv6.nd_neighbor(res = 0, dst = dst_ip,
-                    type_ = icmpv6.nd_neighbor.ND_OPTION_SLA,
-                    length = 1, data = sla_addr)
+        sla_addr = icmpv6.nd_option_sla(hw_src = src_mac_addr)
+        # ns for neighbor solicit; res for reserved, but actually is a flag,
+        # see comments on "nd_option_tla" above
+        ns = icmpv6.nd_neighbor(res = 4, dst = dst_ip, data = sla_addr)
         ic6 = icmpv6.icmpv6(type_ = icmpv6.ND_NEIGHBOR_SOLICIT, code = 0,
                 # checksum = 0 then ryu calculate for you
                 csum = 0, data = ns)
