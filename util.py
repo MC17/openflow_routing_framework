@@ -1,6 +1,7 @@
 from gateway import Gateway
 from ConfigParser import ConfigParser, ParsingError
 import logging
+import netaddr
 
 LOG = logging.getLogger(__name__)
 
@@ -48,6 +49,20 @@ def read_bgp_config(filepath):
             neighborDict = {}
             for option in options:
                 neighborDict[option] = config.get(sectionName, option)
+            try:
+                ipv4 = neighborDict['neighbor_ipv4']
+                neighborDict['neighbor_ipv4'] = netaddr.IPAddress(ipv4)
+            except KeyError:
+                LOG.warning("IPv4 not configured for %s", sectionName)
+            try:
+                ipv6 = neighborDict['neighbor_ipv6']
+                neighborDict['neighbor_ipv6'] = netaddr.IPAddress(ipv6)
+                # see http://en.wikipedia.org/wiki/Solicited-node_multicast_address
+                neighborDict['neighbor_ipv6_sma'] = ipv6_addr_or(netaddr.IPAddress('ff02::1:ff00:0000'),
+                                                    ipv6_addr_and(netaddr.IPAddress('0::ff:ffff'),
+                                                                  netaddr.IPAddress(ipv6)))
+            except KeyError:
+                LOG.warning("IPv6 not configured for %s", sectionName)
             dict_['neighbor'].append(neighborDict)
             i += 1
     except IOError as e:
@@ -55,6 +70,16 @@ def read_bgp_config(filepath):
     except ParsingError as e:
         LOG.error(e)
     return dict_
+
+def ipv6_addr_and(addr1, addr2):
+    words = [w[0]&w[1] for w in zip(addr1.words, addr2.words)]
+    words = ['%x' % w for w in words]
+    return netaddr.IPAddress(':'.join(words))
+
+def ipv6_addr_or(addr1, addr2):
+    words = [w[0]|w[1] for w in zip(addr1.words, addr2.words)]
+    words = ['%x' % w for w in words]
+    return netaddr.IPAddress(':'.join(words))
 
 if __name__ == '__main__':
     filepath = 'routing.config'

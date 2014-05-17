@@ -132,12 +132,16 @@ class Routing(app_manager.RyuApp):
             else:
                 LOG.warning('Some unhandled packets sent from dispatch queue')
                 pass
+        if dst_ip is None:
+            return None, None
         dst_ip = netaddr.IPAddress(dst_ip)
+        LOG.debug("Destination IP for dispatch: %s", dst_ip)
         dst_switch = None
         dst_port = None
         for neighbor in util.bgper_config['neighbor']:
             if netaddr.IPAddress(neighbor['neighbor_ipv4']) == dst_ip or \
-               netaddr.IPAddress(neighbor['neighbor_ipv6']) == dst_ip:
+               netaddr.IPAddress(neighbor['neighbor_ipv6']) == dst_ip or \
+               netaddr.IPAddress(neighbor['neighbor_ipv6_sma']) == dst_ip:
                 dst_switch = neighbor['border_switch']
                 dst_port = int(neighbor['outport_no'])
                 break
@@ -362,7 +366,7 @@ class Routing(app_manager.RyuApp):
                     return packet
             except AttributeError:
                 pass
-        LOG.error("Can't find packet for target %s", target)
+        #LOG.error("Can't find packet for target %s", target)
         return None
 
     def _handle_arp_reply(self, msg, pkt, arp_pkt):
@@ -503,7 +507,7 @@ class Routing(app_manager.RyuApp):
         dst_addr = netaddr.IPAddress(ipv6_pkt.dst)
         if dst_addr == netaddr.IPAddress(util.bgper_config['local_ipv6']):
             self.write_to_tap(pkt.data, modifyMacAddress=True)
-            return
+            # DON'T return here
 
         switch = self.dpid_to_switch[msg.datapath.id]
         in_port_no = msg.in_port
@@ -934,6 +938,7 @@ class Routing(app_manager.RyuApp):
         tcp_layer = self.find_packet(pkt, 'tcp')
         if tcp_layer and tcp_layer.dst_port == BGP4.BGP_TCP_PORT:
             self.write_to_tap(pkt.data, modifyMacAddress=True)
+            LOG.debug("BGP packet has been written to tap")
         # forward packet destined to BGP server address
         dst = netaddr.IPAddress(protocol_pkt.dst)  # could be IPv4 or IPv6
         if dst == netaddr.IPAddress(util.bgper_config['local_ipv4']) or \
@@ -1093,6 +1098,7 @@ class Routing(app_manager.RyuApp):
     def packet_in_handler(self, event):
         data = event.msg.data
         pkt = packet.Packet(data)
+        LOG.debug("PacketIn: %s", pkt.protocols)
         # TODO
         # handle protocols in reverse order
         for p in pkt.protocols:
@@ -1105,4 +1111,5 @@ class Routing(app_manager.RyuApp):
                 self._handle_ip(event.msg, pkt, p)
             else:
                 # might be more classifications here, BGP/OSPF etc.
+                LOG.debug("Unhandled PacketIn %s", p)
                 pass
