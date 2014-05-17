@@ -147,8 +147,15 @@ class Connection(object):
             2) assigns self.capabilities, which is the actual capabilities
                used in this connection
         """
-        for self_capabilities in Server.capabilities:
-            if self_capabilities not in peer_capabilities:
+        self_capability_types = []
+        peer_capability_types = []
+        for c in Server.capabilities:
+            self_capability_types.append(type(c))
+        for c in peer_capabilities:
+            peer_capability_types.append(type(c))
+
+        for self_capability in self_capability_types:
+            if self_capability not in peer_capability_types:
                 return False
         return True
 
@@ -181,7 +188,7 @@ class Connection(object):
             hub.spawn(self.keepalive)
             self.send_current_route_table()
         else:
-            self.send_notification_msg()
+            self.send_notification_msg(err_code=2, err_subcode=0, data="Capability check failed.")
 
     def keepalive(self):
         while True:
@@ -189,7 +196,7 @@ class Connection(object):
             current_time = time.time()
             if current_time - self.peer_last_keepalive_timestamp > \
                self.hold_time:
-                self.send_notification_msg(err_code=4, err_subcode=0, data="Hold timer expired")
+                self.send_notification_msg(err_code=4, err_subcode=0, data="Hold timer expired.")
                 self.is_active = False
             hub.sleep(self.hold_time / 3)
 
